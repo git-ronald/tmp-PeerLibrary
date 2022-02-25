@@ -13,9 +13,8 @@ namespace PeerLibrary
         public HubClient(IOptions<HubSettings> options, ITokenProvider tokenProvider)
         {
             _settings = options.Value;
-            string hubHostUrl = _settings.Locations.Single(l => l.Name == "Local").Url;
 
-            IHubConnectionBuilder connectionBuilder = new HubConnectionBuilder().WithUrl($"{hubHostUrl}/mainhub", options =>
+            IHubConnectionBuilder connectionBuilder = new HubConnectionBuilder().WithUrl(_settings.HubUrl, options =>
             {
                 options.AccessTokenProvider = tokenProvider.GetToken;
             });
