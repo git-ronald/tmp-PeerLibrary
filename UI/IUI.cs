@@ -3,8 +3,8 @@
     // TODO NOW: try TestUI
     public interface IUI
     {
-        void WaitForExit();
-        void WriteLine(string value);
+        ConsoleKeyInfo ReadKey();
+        void WriteLine(object? value);
         void WriteLine();
     }
 }

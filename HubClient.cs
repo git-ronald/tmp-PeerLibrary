@@ -3,14 +3,17 @@ using PeerLibrary.TokenProviders;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
 using PeerLibrary.UI;
+using System.Text;
 
 namespace PeerLibrary
 {
     internal class HubClient : IHubClient
     {
+        private string RetryMessage = "Press Enter to restart connection.";
+
         private readonly HubSettings _settings;
-        private readonly HubConnection _connection;
         private readonly IUI _ui;
+        private readonly HubConnection _connection;
 
         public HubClient(IOptions<HubSettings> options, ITokenProvider tokenProvider, IUI ui)
         {
@@ -26,6 +29,9 @@ namespace PeerLibrary
 
             // TODO NOW: what if hub server shuts down?
 
+            _connection.Closed += OnonnectionClosed;
+            _connection.Reconnected += OnConnectionReconnected;
+
             _connection.On("TestResponse", () => {
                 _ui.WriteLine($"{DateTime.Now} Reveived test response from {_settings.HubUrl}.");
             });
@@ -33,7 +39,7 @@ namespace PeerLibrary
             _connection.On<List<string>>("PeerRequest", async messages =>
             {
                 messages.Add($"{DateTime.Now:HH:mm:ss} {Guid.NewGuid()} Peer");
-                await _connection.InvokeAsync("PeerResponse", messages);
+                await InvokeAsync("PeerResponse", messages);
 
                 _ui.WriteLine();
                 _ui.WriteLine($"Hub called PeerRequest:");
@@ -45,31 +51,84 @@ namespace PeerLibrary
             });
         }
 
+        private Task OnonnectionClosed(Exception? ex)
+        {
+            StringBuilder message = new("Hub connection closed");
+            if (ex is not null)
+            {
+                message.Append(": ");
+                message.Append(ex.Message);
+            }
+            message.Append('.');
+
+            _ui.WriteLine(message);
+            _ui.WriteLine(RetryMessage);
+            return Task.CompletedTask;
+        }
+
+        private Task OnConnectionReconnected(string? arg)
+        {
+            return Task.CompletedTask;
+        }
+
         public async Task Start()
+        {
+            _ui.WriteLine("You can press Escape anytime to quit.");
+            _ui.WriteLine();
+
+            await StartConnection();
+            await WaitForUserInput();
+        }
+
+        private async Task StartConnection()
         {
             try
             {
-                _ui.WriteLine("You can press Escape anytime to quit.");
-                _ui.WriteLine();
-                _ui.WriteLine("Starting Peer...");
+                _ui.WriteLine("Starting connection...");
                 await _connection.StartAsync();
-
-                _ui.WriteLine("Peer started.");
+                _ui.WriteLine("Connection started.");
 
                 _ui.WriteLine($"{DateTime.Now} Send test request...");
-
-                await _connection.InvokeAsync("TestRequest");
+                await InvokeAsync("TestRequest");
             }
             catch (HttpRequestException)
             {
                 _ui.WriteLine($"Failure connecting to hub.");
+                _ui.WriteLine(RetryMessage);
             }
             catch (Exception ex)
             {
-                _ui.WriteLine($"Failed to start Peer: {ex.Message}");
+                _ui.WriteLine($"Failed starting connection: {ex.Message}");
+                _ui.WriteLine(RetryMessage);
             }
+        }
 
-            _ui.WaitForExit();
+        private Task InvokeAsync(string methodName) => TryInvokeAsync(methodName, n => _connection.InvokeAsync(n));
+        private Task InvokeAsync<T>(string methodName, T arg) => TryInvokeAsync(methodName, n => _connection.InvokeAsync<T>(n, arg));
+        private async Task TryInvokeAsync(string methodName, Func<string, Task> invoke)
+        {
+            if (_connection.State != HubConnectionState.Connected)
+            {
+                _ui.WriteLine($"Failed to invoke {methodName} due to closed connection.");
+                return;
+            }
+            await invoke(methodName);
+        }
+
+        private async Task WaitForUserInput()
+        {
+            while (true)
+            {
+                ConsoleKeyInfo key = _ui.ReadKey();
+                if (key.Key == ConsoleKey.Escape)
+                {
+                    break;
+                }
+                if (key.Key == ConsoleKey.Enter && _connection.State == HubConnectionState.Disconnected)
+                {
+                    await StartConnection();
+                }
+            }
         }
 
         public async ValueTask DisposeAsync()
