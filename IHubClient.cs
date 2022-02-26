@@ -3,6 +3,5 @@
     public interface IHubClient : IAsyncDisposable
     {
         Task Start();
-        Task Test();
     }
 }

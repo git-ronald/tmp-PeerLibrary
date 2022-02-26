@@ -2,6 +2,7 @@
 using PeerLibrary.TokenProviders;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
+using PeerLibrary.UI;
 
 namespace PeerLibrary
 {
@@ -9,10 +10,12 @@ namespace PeerLibrary
     {
         private readonly HubSettings _settings;
         private readonly HubConnection _connection;
+        private readonly IUI _ui;
 
-        public HubClient(IOptions<HubSettings> options, ITokenProvider tokenProvider)
+        public HubClient(IOptions<HubSettings> options, ITokenProvider tokenProvider, IUI ui)
         {
             _settings = options.Value;
+            _ui = ui;
 
             IHubConnectionBuilder connectionBuilder = new HubConnectionBuilder().WithUrl(_settings.HubUrl, options =>
             {
@@ -21,35 +24,52 @@ namespace PeerLibrary
 
             _connection = connectionBuilder.Build();
 
+            // TODO NOW: what if hub server shuts down?
+
+            _connection.On("TestResponse", () => {
+                _ui.WriteLine($"{DateTime.Now} Reveived test response from {_settings.HubUrl}.");
+            });
+
             _connection.On<List<string>>("PeerRequest", async messages =>
             {
                 messages.Add($"{DateTime.Now:HH:mm:ss} {Guid.NewGuid()} Peer");
                 await _connection.InvokeAsync("PeerResponse", messages);
 
-                Console.WriteLine();
-                Console.WriteLine($"Hub called PeerRequest:");
+                _ui.WriteLine();
+                _ui.WriteLine($"Hub called PeerRequest:");
 
                 foreach (string msg in messages)
                 {
-                    Console.WriteLine(msg);
+                    _ui.WriteLine(msg);
                 }
             });
         }
 
-        public Task Start()
+        public async Task Start()
         {
-            return _connection.StartAsync();
-        }
+            try
+            {
+                _ui.WriteLine("You can press Escape anytime to quit.");
+                _ui.WriteLine();
+                _ui.WriteLine("Starting Peer...");
+                await _connection.StartAsync();
 
-        public async Task Test()
-        {
-            string message = $"{DateTime.Now:HH:mm:ss} {Guid.NewGuid()} Peer";
+                _ui.WriteLine("Peer started.");
 
-            Console.WriteLine();
-            Console.WriteLine($"Peer called TestRequest:");
-            Console.WriteLine(message);
+                _ui.WriteLine($"{DateTime.Now} Send test request...");
 
-            await _connection.InvokeAsync("TestRequest", message);
+                await _connection.InvokeAsync("TestRequest");
+            }
+            catch (HttpRequestException)
+            {
+                _ui.WriteLine($"Failure connecting to hub.");
+            }
+            catch (Exception ex)
+            {
+                _ui.WriteLine($"Failed to start Peer: {ex.Message}");
+            }
+
+            _ui.WaitForExit();
         }
 
         public async ValueTask DisposeAsync()

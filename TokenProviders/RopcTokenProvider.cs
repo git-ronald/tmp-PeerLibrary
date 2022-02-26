@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Options;
 using PeerLibrary.Models;
 using PeerLibrary.Settings;
+using PeerLibrary.UI;
 using System.Text.Json;
 
 namespace PeerLibrary.TokenProviders
@@ -8,14 +9,16 @@ namespace PeerLibrary.TokenProviders
     internal class RopcTokenProvider : ITokenProvider
     {
         private readonly HubSettings _settings;
+        private readonly IUI _ui;
         private readonly Dictionary<string, string> _tokenPostData;
         private readonly Dictionary<string, string> _refreshPostData;
 
         private TokenInfo _tokenInfo = new();
 
-        public RopcTokenProvider(IOptions<HubSettings> options)
+        public RopcTokenProvider(IOptions<HubSettings> options, IUI ui)
         {
             _settings = options.Value;
+            _ui = ui;
             _tokenPostData = BuildTokenPostData();
             _refreshPostData = BuildBasicRefreshPostData();
         }
@@ -50,19 +53,18 @@ namespace PeerLibrary.TokenProviders
 
             if (_tokenInfo.AccessTokenExpiration > threshold)
             {
-                Console.WriteLine("Reuse token.");
                 return _tokenInfo.AccessToken;
             }
 
             if (_tokenInfo.RefreshTokenExpiration > threshold)
             {
                 _tokenInfo = await RefreshToken();
-                Console.WriteLine("Refreshed token.");
+                _ui.WriteLine("Refreshed token.");
                 return _tokenInfo.AccessToken;
             }
 
             _tokenInfo = await GetNewToken();
-            Console.WriteLine($"Got new token. Expiry time: {_tokenInfo.AccessTokenExpiration}.");
+            _ui.WriteLine($"Got new token. Expiry time: {_tokenInfo.AccessTokenExpiration}.");
             return _tokenInfo.AccessToken;
         }
 
@@ -85,8 +87,6 @@ namespace PeerLibrary.TokenProviders
 
         private async Task<TokenInfo> RefreshToken()
         {
-            Console.WriteLine("Refreshing token...");
-
             FormUrlEncodedContent content = new(_refreshPostData.Concat(new Dictionary<string, string>
             {
                 { "refresh_token", _tokenInfo.RefreshToken }

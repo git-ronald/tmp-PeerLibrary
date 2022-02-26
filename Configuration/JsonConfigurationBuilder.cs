@@ -10,12 +10,12 @@ namespace PeerLibrary.Configuration
 {
     public class JsonConfigurationBuilder
     {
-        private readonly IServiceCollection _serviceCollection;
+        private readonly IServiceCollection _services;
         private readonly IConfigurationRoot? _configRoot;
 
-        public JsonConfigurationBuilder(IServiceCollection serviceCollection, IConfigurationRoot ? configRoot = null)
+        public JsonConfigurationBuilder(IServiceCollection services, IConfigurationRoot ? configRoot = null)
         {
-            _serviceCollection = serviceCollection;
+            _services = services;
             _configRoot = configRoot;
         }
 
@@ -23,9 +23,9 @@ namespace PeerLibrary.Configuration
         {
             if (_configRoot == null)
             {
-                return _serviceCollection;
+                return _services;
             }
-            return _serviceCollection.Configure<T>(_configRoot.GetSection(section));
+            return _services.Configure<T>(_configRoot.GetSection(section));
         }
     }
 }
