@@ -59,12 +59,12 @@ namespace PeerLibrary.TokenProviders
             if (_tokenInfo.RefreshTokenExpiration > threshold)
             {
                 _tokenInfo = await RefreshToken();
-                _ui.WriteLine("Refreshed token.");
+                _ui.WriteTimeAndLine("Refreshed token.");
                 return _tokenInfo.AccessToken;
             }
 
             _tokenInfo = await GetNewToken();
-            _ui.WriteLine("Acquired new token.");
+            _ui.WriteTimeAndLine("Acquired new token.");
             return _tokenInfo.AccessToken;
         }
 

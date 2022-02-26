@@ -10,13 +10,9 @@ namespace PeerLibrary
 {
     internal class HubClient : ImmediatelyDisposable, IHubClient
     {
-        private string RetryMessage = "Press Enter to restart connection.";
-
         private readonly HubSettings _settings;
         private readonly IUI _ui;
         private readonly HubConnection _connection;
-
-        bool _closing = false;
 
         public HubClient(IOptions<HubSettings> options, ITokenProvider tokenProvider, IUI ui)
         {
@@ -36,7 +32,7 @@ namespace PeerLibrary
             _connection.Reconnected += OnConnectionReconnected;
 
             _connection.On("TestResponse", () => {
-                _ui.WriteLine($"{DateTime.Now} Reveived test response from {_settings.HubUrl}.");
+                _ui.WriteTimeAndLine($"Reveived test response from {_settings.HubUrl}.");
             });
 
             _connection.On<List<string>>("PeerRequest", async messages =>
@@ -45,7 +41,7 @@ namespace PeerLibrary
                 await InvokeAsync("PeerResponse", messages);
 
                 _ui.WriteLine();
-                _ui.WriteLine($"Hub called PeerRequest:");
+                _ui.WriteTimeAndLine($"Hub called PeerRequest:");
 
                 foreach (string msg in messages)
                 {
@@ -65,11 +61,6 @@ namespace PeerLibrary
             message.Append('.');
 
             _ui.WriteLine(message);
-            if (!_closing)
-            {
-                _ui.WriteLine(RetryMessage);
-            }
-
             return Task.CompletedTask;
         }
 
@@ -80,48 +71,55 @@ namespace PeerLibrary
 
         protected override async Task<IAsyncDisposable> Execute()
         {
-            _ui.WriteLine("You can press Escape anytime to quit.");
+            _ui.WriteLine("Valid input:");
+            _ui.WriteLine($"- {ConsoleKey.Escape} : quit");
+            _ui.WriteLine($"- {ConsoleKey.Enter}  : retry connection");
             _ui.WriteLine();
 
-            await StartConnection();
+            await SendTestRequest();
             await WaitForUserInput();
 
             return this;
         }
 
-        private async Task StartConnection()
+        private async Task SendTestRequest()
         {
-            try
-            {
-                _ui.WriteLine("Starting hub connection...");
-                await _connection.StartAsync();
-                _ui.WriteLine("Hub connection started.");
-
-                _ui.WriteLine($"{DateTime.Now} Send test request...");
-                await InvokeAsync("TestRequest");
-            }
-            catch (HttpRequestException)
-            {
-                _ui.WriteLine($"Failure connecting to hub.");
-                _ui.WriteLine(RetryMessage);
-            }
-            catch (Exception ex)
-            {
-                _ui.WriteLine($"Failed starting connection: {ex.Message}");
-                _ui.WriteLine(RetryMessage);
-            }
+            _ui.WriteTimeAndLine("Send test request...");
+            await InvokeAsync("TestRequest");
         }
 
         private Task InvokeAsync(string methodName) => TryInvokeAsync(methodName, n => _connection.InvokeAsync(n));
         private Task InvokeAsync<T>(string methodName, T arg) => TryInvokeAsync(methodName, n => _connection.InvokeAsync<T>(n, arg));
         private async Task TryInvokeAsync(string methodName, Func<string, Task> invoke)
         {
-            if (_connection.State != HubConnectionState.Connected)
+            try
             {
-                _ui.WriteLine($"Failed to invoke {methodName} due to closed connection.");
-                return;
+                if (_connection.State == HubConnectionState.Disconnected)
+                {
+                    await StartConnection();
+                }
+                if (_connection.State != HubConnectionState.Connected)
+                {
+                    _ui.WriteLine($"Failed to invoke {methodName} due to closed connection.");
+                    return;
+                }
+                await invoke(methodName);
             }
-            await invoke(methodName);
+            catch (HttpRequestException)
+            {
+                _ui.WriteLine($"Failure connecting to hub.");
+            }
+            catch (Exception ex)
+            {
+                _ui.WriteLine($"Failed starting connection: {ex.Message}");
+            }
+        }
+
+        private async Task StartConnection()
+        {
+            _ui.WriteTimeAndLine("Starting hub connection...");
+            await _connection.StartAsync();
+            _ui.WriteTimeAndLine("Hub connection started.");
         }
 
         private async Task WaitForUserInput()
@@ -135,14 +133,13 @@ namespace PeerLibrary
                 }
                 if (key.Key == ConsoleKey.Enter && _connection.State == HubConnectionState.Disconnected)
                 {
-                    await StartConnection();
+                    await SendTestRequest();
                 }
             }
         }
 
         public async ValueTask DisposeAsync()
         {
-            _closing = true;
             await _connection.StopAsync();
             await _connection.DisposeAsync();
         }

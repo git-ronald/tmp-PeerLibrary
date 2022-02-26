@@ -6,5 +6,6 @@
         ConsoleKeyInfo ReadKey();
         void WriteLine(object? value);
         void WriteLine();
+        void WriteTimeAndLine(object? value);
     }
 }
