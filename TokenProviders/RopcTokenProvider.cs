@@ -64,7 +64,7 @@ namespace PeerLibrary.TokenProviders
             }
 
             _tokenInfo = await GetNewToken();
-            _ui.WriteLine($"Got new token. Expiry time: {_tokenInfo.AccessTokenExpiration}.");
+            _ui.WriteLine("Acquired new token.");
             return _tokenInfo.AccessToken;
         }
 

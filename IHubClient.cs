@@ -1,7 +1,8 @@
-﻿namespace PeerLibrary
+﻿using CoreLibrary;
+
+namespace PeerLibrary
 {
-    public interface IHubClient : IAsyncDisposable
+    public interface IHubClient : IAsyncDisposable, IImmediatelyDisposable
     {
-        Task Start();
     }
 }

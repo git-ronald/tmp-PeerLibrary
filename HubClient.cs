@@ -4,16 +4,19 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
 using PeerLibrary.UI;
 using System.Text;
+using CoreLibrary;
 
 namespace PeerLibrary
 {
-    internal class HubClient : IHubClient
+    internal class HubClient : ImmediatelyDisposable, IHubClient
     {
         private string RetryMessage = "Press Enter to restart connection.";
 
         private readonly HubSettings _settings;
         private readonly IUI _ui;
         private readonly HubConnection _connection;
+
+        bool _closing = false;
 
         public HubClient(IOptions<HubSettings> options, ITokenProvider tokenProvider, IUI ui)
         {
@@ -53,7 +56,7 @@ namespace PeerLibrary
 
         private Task OnonnectionClosed(Exception? ex)
         {
-            StringBuilder message = new("Hub connection closed");
+            StringBuilder message = new($"{DateTime.Now} Hub connection closed");
             if (ex is not null)
             {
                 message.Append(": ");
@@ -62,7 +65,11 @@ namespace PeerLibrary
             message.Append('.');
 
             _ui.WriteLine(message);
-            _ui.WriteLine(RetryMessage);
+            if (!_closing)
+            {
+                _ui.WriteLine(RetryMessage);
+            }
+
             return Task.CompletedTask;
         }
 
@@ -71,22 +78,24 @@ namespace PeerLibrary
             return Task.CompletedTask;
         }
 
-        public async Task Start()
+        protected override async Task<IAsyncDisposable> Execute()
         {
             _ui.WriteLine("You can press Escape anytime to quit.");
             _ui.WriteLine();
 
             await StartConnection();
             await WaitForUserInput();
+
+            return this;
         }
 
         private async Task StartConnection()
         {
             try
             {
-                _ui.WriteLine("Starting connection...");
+                _ui.WriteLine("Starting hub connection...");
                 await _connection.StartAsync();
-                _ui.WriteLine("Connection started.");
+                _ui.WriteLine("Hub connection started.");
 
                 _ui.WriteLine($"{DateTime.Now} Send test request...");
                 await InvokeAsync("TestRequest");
@@ -133,6 +142,7 @@ namespace PeerLibrary
 
         public async ValueTask DisposeAsync()
         {
+            _closing = true;
             await _connection.StopAsync();
             await _connection.DisposeAsync();
         }

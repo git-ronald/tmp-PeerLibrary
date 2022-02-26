@@ -32,6 +32,11 @@ namespace PeerLibrary.Configuration
             return new JsonConfigurationBuilder(services, configRoot);
         }
 
+        public static Task StartHubClient(this IServiceProvider serviceProvider)
+        {
+            return serviceProvider.GetServiceOrThrow<IHubClient>().ExecuteDispose();
+        }
+
         public static TService GetServiceOrThrow<TService>(this IServiceProvider serviceProvider)
         {
             return serviceProvider.GetServiceOrThrow<TService>(() => new Exception($"Failed to create {typeof(TService).Name}"));
