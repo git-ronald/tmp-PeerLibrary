@@ -46,7 +46,7 @@ namespace PeerLibrary.TokenProviders
 
         public async Task<string?> GetToken()
         {
-            DateTime threshold = DateTime.Now.AddMinutes(-3);
+            DateTime threshold = DateTime.UtcNow.AddMinutes(-3);
 
             if (_tokenInfo.AccessTokenExpiration > threshold)
             {

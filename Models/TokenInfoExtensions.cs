@@ -6,7 +6,7 @@ namespace PeerLibrary.Models
     {
         public static TokenInfo ToTokenInfo(this Dictionary<string, object> tokenDict)
         {
-            DateTime now = DateTime.Now;
+            DateTime now = DateTime.UtcNow;
 
             TokenInfo tokenInfo = new()
             {

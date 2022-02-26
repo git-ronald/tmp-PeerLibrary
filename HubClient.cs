@@ -21,14 +21,18 @@ namespace PeerLibrary
 
             _connection = connectionBuilder.Build();
 
-            _connection.On<string>("GetIt", message =>
+            _connection.On<List<string>>("PeerRequest", async messages =>
             {
-                Console.WriteLine($"Got message from hub: {message}");
-            });
+                messages.Add($"{DateTime.Now:HH:mm:ss} {Guid.NewGuid()} Peer");
+                await _connection.InvokeAsync("PeerResponse", messages);
 
-            _connection.On<string>("Test", message =>
-            {
-                Console.WriteLine($"Test event. Receiced message: {message}");
+                Console.WriteLine();
+                Console.WriteLine($"Hub called PeerRequest:");
+
+                foreach (string msg in messages)
+                {
+                    Console.WriteLine(msg);
+                }
             });
         }
 
@@ -37,9 +41,15 @@ namespace PeerLibrary
             return _connection.StartAsync();
         }
 
-        public Task Test()
+        public async Task Test()
         {
-            return _connection.InvokeAsync("DoIt", "Little Pony");
+            string message = $"{DateTime.Now:HH:mm:ss} {Guid.NewGuid()} Peer";
+
+            Console.WriteLine();
+            Console.WriteLine($"Peer called TestRequest:");
+            Console.WriteLine(message);
+
+            await _connection.InvokeAsync("TestRequest", message);
         }
 
         public async ValueTask DisposeAsync()
