@@ -19,10 +19,10 @@ namespace PeerLibrary
             _settings = options.Value;
             _ui = ui;
 
-            IHubConnectionBuilder connectionBuilder = new HubConnectionBuilder().WithUrl(_settings.HubUrl, options =>
+            IHubConnectionBuilder connectionBuilder = new HubConnectionBuilder().WithUrl($"{_settings.HubUrl}?clienttype=peer1", options =>
             {
                 options.AccessTokenProvider = tokenProvider.GetToken;
-            });
+            }); //.WithAutomaticReconnect();
 
             _connection = connectionBuilder.Build();
 
@@ -48,6 +48,14 @@ namespace PeerLibrary
                     _ui.WriteLine(msg);
                 }
             });
+
+            _connection.On<List<string>>("HubResponse", async messages =>
+            {
+                _ui.WriteLine();
+                _ui.WriteTimeAndLine("Hub response");
+                _ui.WriteLine($"Message count: {messages.Count}");
+                _ui.WriteLine($"Last message: {messages.LastOrDefault()}");
+            });
         }
 
         private Task OnonnectionClosed(Exception? ex)
@@ -66,6 +74,7 @@ namespace PeerLibrary
 
         private Task OnConnectionReconnected(string? arg)
         {
+            // TODO NOW: after server disconnects retry using timer interval of 1 minute
             return Task.CompletedTask;
         }
 
