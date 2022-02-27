@@ -1,10 +1,10 @@
-﻿using PeerLibrary.Settings;
-using PeerLibrary.TokenProviders;
+﻿using CoreLibrary;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
+using PeerLibrary.Settings;
+using PeerLibrary.TokenProviders;
 using PeerLibrary.UI;
 using System.Text;
-using CoreLibrary;
 
 namespace PeerLibrary
 {
@@ -14,24 +14,23 @@ namespace PeerLibrary
         private readonly IUI _ui;
         private readonly HubConnection _connection;
 
-        public HubClient(IOptions<HubSettings> options, ITokenProvider tokenProvider, IUI ui)
+        public HubClient(IOptions<HubSettings> options, IUI ui, ITokenProvider tokenProvider)
         {
             _settings = options.Value;
             _ui = ui;
 
-            IHubConnectionBuilder connectionBuilder = new HubConnectionBuilder().WithUrl($"{_settings.HubUrl}?clienttype=peer1", options =>
-            {
-                options.AccessTokenProvider = tokenProvider.GetToken;
-            }); //.WithAutomaticReconnect();
+            IHubConnectionBuilder connectionBuilder = new HubConnectionBuilder()
+                .WithUrl($"{_settings.HubUrl}?clienttype=peer1", options =>
+                {
+                    options.AccessTokenProvider = tokenProvider.GetToken;
+                })
+                .WithAutomaticReconnect();
 
             _connection = connectionBuilder.Build();
-
-            // TODO NOW: what if hub server shuts down?
-
             _connection.Closed += OnonnectionClosed;
-            _connection.Reconnected += OnConnectionReconnected;
 
-            _connection.On("TestResponse", () => {
+            _connection.On("TestResponse", () =>
+            {
                 _ui.WriteTimeAndLine($"Reveived test response from {_settings.HubUrl}.");
             });
 
@@ -49,7 +48,7 @@ namespace PeerLibrary
                 }
             });
 
-            _connection.On<List<string>>("HubResponse", async messages =>
+            _connection.On<List<string>>("HubResponse", messages =>
             {
                 _ui.WriteLine();
                 _ui.WriteTimeAndLine("Hub response");
@@ -58,7 +57,7 @@ namespace PeerLibrary
             });
         }
 
-        private Task OnonnectionClosed(Exception? ex)
+        private async Task OnonnectionClosed(Exception? ex)
         {
             StringBuilder message = new($"{DateTime.Now} Hub connection closed");
             if (ex is not null)
@@ -67,15 +66,9 @@ namespace PeerLibrary
                 message.Append(ex.Message);
             }
             message.Append('.');
-
             _ui.WriteLine(message);
-            return Task.CompletedTask;
-        }
 
-        private Task OnConnectionReconnected(string? arg)
-        {
-            // TODO NOW: after server disconnects retry using timer interval of 1 minute
-            return Task.CompletedTask;
+            await ScheduleConnectAttempts();
         }
 
         protected override async Task<IAsyncDisposable> Execute()
@@ -91,10 +84,10 @@ namespace PeerLibrary
             return this;
         }
 
-        private async Task SendTestRequest()
+        private Task SendTestRequest()
         {
             _ui.WriteTimeAndLine("Send test request...");
-            await InvokeAsync("TestRequest");
+            return InvokeAsync("TestRequest");
         }
 
         private Task InvokeAsync(string methodName) => TryInvokeAsync(methodName, n => _connection.InvokeAsync(n));
@@ -117,10 +110,12 @@ namespace PeerLibrary
             catch (HttpRequestException)
             {
                 _ui.WriteLine($"Failure connecting to hub.");
+                await ScheduleConnectAttempts();
             }
             catch (Exception ex)
             {
                 _ui.WriteLine($"Failed starting connection: {ex.Message}");
+                await ScheduleConnectAttempts();
             }
         }
 
@@ -129,6 +124,16 @@ namespace PeerLibrary
             _ui.WriteTimeAndLine("Starting hub connection...");
             await _connection.StartAsync();
             _ui.WriteTimeAndLine("Hub connection started.");
+        }
+
+        private async Task ScheduleConnectAttempts()
+        {
+            await Task.Delay(_settings.TryConnectInterval * 1000);
+
+            if (_connection.State == HubConnectionState.Disconnected)
+            {
+                await SendTestRequest();
+            }
         }
 
         private async Task WaitForUserInput()
