@@ -13,14 +13,14 @@ namespace PeerLibrary.Configuration
         public static IServiceCollection AddPeerLibrary<TUI>(this IServiceCollection services) where TUI : class, IUI
         {
             return services
-                .AdddJsonConfiguration("peerlibrary.settings.json")
+                .AddJsonConfiguration("peerlibrary.settings.json")
                 .Configure<HubSettings>("hub")
                 .AddSingleton<ITokenProvider, RopcTokenProvider>()
                 .AddTransient<IUI, TUI>()
                 .AddTransient<IHubClient, HubClient>();
         }
 
-        public static JsonConfigurationBuilder AdddJsonConfiguration(this IServiceCollection services, string fileName)
+        public static JsonConfigurationBuilder AddJsonConfiguration(this IServiceCollection services, string fileName)
         {
             var dirInfo = Directory.GetParent(AppContext.BaseDirectory);
             if (dirInfo == null)
