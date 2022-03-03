@@ -1,8 +1,8 @@
 ﻿namespace PeerLibrary.Settings
 {
-    internal class PeerSettings
+    public class PeerSettings
     {
-        public Guid PeerId { get; set; }
+        public Guid? PeerId { get; set; }
         public string PeerName { get; set; } = string.Empty;
     }
 }

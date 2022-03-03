@@ -14,7 +14,6 @@ namespace PeerLibrary.Configuration
         {
             return services
                 .AddJsonConfiguration("peerlibrary.settings.json").Configure<HubSettings>("hub")
-                .AddJsonConfiguration("appsettings.json").Configure<PeerSettings>("peerSettings")
                 .AddSingleton<ITokenProvider, RopcTokenProvider>()
                 .AddTransient<IUI, TUI>()
                 .AddTransient<IHubClient, HubClient>();
@@ -28,7 +27,7 @@ namespace PeerLibrary.Configuration
                 return new JsonConfigurationBuilder(services);
             }
 
-            IConfigurationRoot? configRoot = new ConfigurationBuilder().SetBasePath(dirInfo.FullName).AddJsonFile(fileName).Build();
+            IConfigurationRoot? configRoot = new ConfigurationBuilder().SetBasePath(dirInfo.FullName).AddJsonFile(fileName, true).Build();
             return new JsonConfigurationBuilder(services, configRoot);
         }
 

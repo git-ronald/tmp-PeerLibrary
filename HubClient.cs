@@ -14,13 +14,22 @@ namespace PeerLibrary
         private readonly HubSettings _hubSettings;
         private readonly PeerSettings _peerSettings;
         private readonly IUI _ui;
-        private readonly HubConnection _connection;
+        private readonly HubConnection? _connection;
 
         public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider)
         {
             _hubSettings = hubOptions.Value;
             _peerSettings = peerOptions.Value;
             _ui = ui;
+            _connection = BuildHubConnection(tokenProvider);
+        }
+
+        private HubConnection? BuildHubConnection(ITokenProvider tokenProvider)
+        {
+            if (!_peerSettings.PeerId.HasValue)
+            {
+                return null;
+            }
 
             IHubConnectionBuilder connectionBuilder = new HubConnectionBuilder()
                 .WithUrl($"{_hubSettings.HubUrl}?clienttype=backend", options =>
@@ -29,28 +38,37 @@ namespace PeerLibrary
                 })
                 .WithAutomaticReconnect();
 
-            _connection = connectionBuilder.Build();
-            AddConnectionEventHandlers();
+            HubConnection connection = connectionBuilder.Build();
+            AddConnectionEventHandlers(connection);
+
+            return connection;
         }
 
-        private void AddConnectionEventHandlers()
+        private void AddConnectionEventHandlers(HubConnection connection)
         {
-            _connection.Closed += OnonnectionClosed;
+            if (!_peerSettings.PeerId.HasValue)
+            {
+                return;
+            }
 
-            _connection.On("TestResponse", () =>
+            connection.Closed += OnonnectionClosed;
+
+            connection.On("TestResponse", () =>
             {
                 _ui.WriteTimeAndLine($"Reveived test response from {_hubSettings.HubUrl}.");
             });
 
             // TODO: protect incoming calls with extra "secret"
-            _connection.On("RequestPeerRegistrationInfo", () =>
+            connection.On("RequestPeerRegistrationInfo", () =>
             {
-                return Invoke("PeerRegistrationInfoResponse", new PeerRegistrationInfo(_peerSettings.PeerId, _peerSettings.PeerName));
+                _ui.WriteTimeAndLine($"Peer registration info requested.");
+                return Invoke("PeerRegistrationInfoResponse", new PeerRegistrationInfo(_peerSettings.PeerId.Value, _peerSettings.PeerName));
             });
+
 
             // TODO the rest is test code. Delete it at some time...
 
-            _connection.On<List<string>>("PeerRequest", async messages =>
+            connection.On<List<string>>("PeerRequest", async messages =>
             {
                 messages.Add($"{DateTime.Now:HH:mm:ss} {Guid.NewGuid()} Peer");
                 await Invoke("PeerResponse", messages);
@@ -64,7 +82,7 @@ namespace PeerLibrary
                 }
             });
 
-            _connection.On<List<string>>("HubResponse", messages =>
+            connection.On<List<string>>("HubResponse", messages =>
             {
                 _ui.WriteLine();
                 _ui.WriteTimeAndLine("Hub response");
@@ -89,6 +107,12 @@ namespace PeerLibrary
 
         protected override async Task<IAsyncDisposable> Execute()
         {
+            if (!_peerSettings.PeerId.HasValue)
+            {
+                ShowErrorConfigNotLoaded();
+                return this;
+            }
+
             _ui.WriteLine("Valid input:");
             _ui.WriteLine($"- {ConsoleKey.Escape} : quit");
             _ui.WriteLine($"- {ConsoleKey.Enter}  : retry connection");
@@ -100,18 +124,38 @@ namespace PeerLibrary
             return this;
         }
 
+        private void ShowErrorConfigNotLoaded()
+        {
+            _ui.WriteLine("The peer settings configuration file could not be loaded.");
+            _ui.WriteLine($"Press {ConsoleKey.Escape} to quit.");
+
+            while (true)
+            {
+                ConsoleKeyInfo key = _ui.ReadKey();
+                if (key.Key == ConsoleKey.Escape)
+                {
+                    return;
+                }
+            }
+        }
+
         private Task SendTestRequest()
         {
             _ui.WriteTimeAndLine("Send test request...");
             return Invoke("TestRequest");
         }
 
-        private Task Invoke(string methodName) => TryInvoke(methodName, n => _connection.InvokeAsync(n));
-        private Task Invoke<T>(string methodName, T arg) => TryInvoke(methodName, n => _connection.InvokeAsync<T>(n, arg));
-        private async Task TryInvoke(string methodName, Func<string, Task> invoke)
+        private Task Invoke(string methodName) => TryInvoke(methodName, (c, n) => c.InvokeAsync(n));
+        private Task Invoke<T>(string methodName, T arg) => TryInvoke(methodName, (c, n) => c.InvokeAsync<T>(n, arg));
+        private async Task TryInvoke(string methodName, Func<HubConnection, string, Task> invoke)
         {
             try
             {
+                if (_connection is null)
+                {
+                    return;
+                }
+
                 if (_connection.State == HubConnectionState.Disconnected)
                 {
                     await StartConnection();
@@ -121,7 +165,7 @@ namespace PeerLibrary
                     _ui.WriteLine($"Failed to invoke {methodName} due to closed connection.");
                     return;
                 }
-                await invoke(methodName);
+                await invoke(_connection, methodName);
             }
             catch (HttpRequestException)
             {
@@ -137,6 +181,11 @@ namespace PeerLibrary
 
         private async Task StartConnection()
         {
+            if (_connection is null)
+            {
+                return;
+            }
+
             _ui.WriteTimeAndLine("Starting hub connection...");
             await _connection.StartAsync();
             _ui.WriteTimeAndLine("Hub connection started.");
@@ -144,6 +193,11 @@ namespace PeerLibrary
 
         private async Task ScheduleConnectAttempts()
         {
+            if (_connection is null)
+            {
+                return;
+            }
+
             await Task.Delay(_hubSettings.TryConnectInterval * 1000);
 
             if (_connection.State == HubConnectionState.Disconnected)
@@ -161,7 +215,7 @@ namespace PeerLibrary
                 {
                     break;
                 }
-                if (key.Key == ConsoleKey.Enter && _connection.State == HubConnectionState.Disconnected)
+                if (key.Key == ConsoleKey.Enter && _connection?.State == HubConnectionState.Disconnected)
                 {
                     await SendTestRequest();
                 }
@@ -170,8 +224,11 @@ namespace PeerLibrary
 
         public async ValueTask DisposeAsync()
         {
-            await _connection.StopAsync();
-            await _connection.DisposeAsync();
+            if (_connection is not null)
+            {
+                await _connection.StopAsync();
+                await _connection.DisposeAsync();
+            }
         }
     }
 }
