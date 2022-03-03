@@ -1,4 +1,5 @@
 ﻿using CoreLibrary;
+using CoreLibrary.PeerInterface;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
 using PeerLibrary.Settings;
@@ -10,34 +11,49 @@ namespace PeerLibrary
 {
     internal class HubClient : ImmediatelyDisposable, IHubClient
     {
-        private readonly HubSettings _settings;
+        private readonly HubSettings _hubSettings;
+        private readonly PeerSettings _peerSettings;
         private readonly IUI _ui;
         private readonly HubConnection _connection;
 
-        public HubClient(IOptions<HubSettings> options, IUI ui, ITokenProvider tokenProvider)
+        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider)
         {
-            _settings = options.Value;
+            _hubSettings = hubOptions.Value;
+            _peerSettings = peerOptions.Value;
             _ui = ui;
 
             IHubConnectionBuilder connectionBuilder = new HubConnectionBuilder()
-                .WithUrl($"{_settings.HubUrl}?clienttype=peer1", options =>
+                .WithUrl($"{_hubSettings.HubUrl}?clienttype=backend", options =>
                 {
                     options.AccessTokenProvider = tokenProvider.GetToken;
                 })
                 .WithAutomaticReconnect();
 
             _connection = connectionBuilder.Build();
+            AddConnectionEventHandlers();
+        }
+
+        private void AddConnectionEventHandlers()
+        {
             _connection.Closed += OnonnectionClosed;
 
             _connection.On("TestResponse", () =>
             {
-                _ui.WriteTimeAndLine($"Reveived test response from {_settings.HubUrl}.");
+                _ui.WriteTimeAndLine($"Reveived test response from {_hubSettings.HubUrl}.");
             });
+
+            // TODO: protect incoming calls with extra "secret"
+            _connection.On("RequestPeerRegistrationInfo", () =>
+            {
+                return Invoke("PeerRegistrationInfoResponse", new PeerRegistrationInfo(_peerSettings.PeerId, _peerSettings.PeerName));
+            });
+
+            // TODO the rest is test code. Delete it at some time...
 
             _connection.On<List<string>>("PeerRequest", async messages =>
             {
                 messages.Add($"{DateTime.Now:HH:mm:ss} {Guid.NewGuid()} Peer");
-                await InvokeAsync("PeerResponse", messages);
+                await Invoke("PeerResponse", messages);
 
                 _ui.WriteLine();
                 _ui.WriteTimeAndLine($"Hub called PeerRequest:");
@@ -87,12 +103,12 @@ namespace PeerLibrary
         private Task SendTestRequest()
         {
             _ui.WriteTimeAndLine("Send test request...");
-            return InvokeAsync("TestRequest");
+            return Invoke("TestRequest");
         }
 
-        private Task InvokeAsync(string methodName) => TryInvokeAsync(methodName, n => _connection.InvokeAsync(n));
-        private Task InvokeAsync<T>(string methodName, T arg) => TryInvokeAsync(methodName, n => _connection.InvokeAsync<T>(n, arg));
-        private async Task TryInvokeAsync(string methodName, Func<string, Task> invoke)
+        private Task Invoke(string methodName) => TryInvoke(methodName, n => _connection.InvokeAsync(n));
+        private Task Invoke<T>(string methodName, T arg) => TryInvoke(methodName, n => _connection.InvokeAsync<T>(n, arg));
+        private async Task TryInvoke(string methodName, Func<string, Task> invoke)
         {
             try
             {
@@ -128,7 +144,7 @@ namespace PeerLibrary
 
         private async Task ScheduleConnectAttempts()
         {
-            await Task.Delay(_settings.TryConnectInterval * 1000);
+            await Task.Delay(_hubSettings.TryConnectInterval * 1000);
 
             if (_connection.State == HubConnectionState.Disconnected)
             {

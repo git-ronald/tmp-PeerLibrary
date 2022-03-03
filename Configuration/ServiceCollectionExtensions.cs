@@ -13,8 +13,8 @@ namespace PeerLibrary.Configuration
         public static IServiceCollection AddPeerLibrary<TUI>(this IServiceCollection services) where TUI : class, IUI
         {
             return services
-                .AddJsonConfiguration("peerlibrary.settings.json")
-                .Configure<HubSettings>("hub")
+                .AddJsonConfiguration("peerlibrary.settings.json").Configure<HubSettings>("hub")
+                .AddJsonConfiguration("appsettings.json").Configure<PeerSettings>("peerSettings")
                 .AddSingleton<ITokenProvider, RopcTokenProvider>()
                 .AddTransient<IUI, TUI>()
                 .AddTransient<IHubClient, HubClient>();
