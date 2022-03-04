@@ -62,7 +62,11 @@ namespace PeerLibrary
             connection.On("RequestPeerRegistrationInfo", () =>
             {
                 _ui.WriteTimeAndLine($"Peer registration info requested.");
-                return Invoke("PeerRegistrationInfoResponse", new PeerRegistrationInfo(_peerSettings.PeerId.Value, _peerSettings.PeerName));
+                return Invoke("PeerRegistrationInfoResponse", new PeerRegistrationInfo
+                {
+                    PeerId = _peerSettings.PeerId.Value,
+                    PeerName = _peerSettings.PeerName
+                });
             });
 
 

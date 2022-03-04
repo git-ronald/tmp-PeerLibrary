@@ -1,6 +1,6 @@
 ﻿using CoreLibrary.Helpers;
 
-namespace PeerLibrary.Models
+namespace PeerLibrary.TokenProviders.Models
 {
     static internal class TokenInfoExtensions
     {

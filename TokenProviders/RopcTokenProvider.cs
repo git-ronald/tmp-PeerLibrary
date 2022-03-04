@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Options;
-using PeerLibrary.Models;
 using PeerLibrary.Settings;
+using PeerLibrary.TokenProviders.Models;
 using PeerLibrary.UI;
 using System.Text.Json;
 

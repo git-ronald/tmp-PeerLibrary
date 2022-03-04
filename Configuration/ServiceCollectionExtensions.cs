@@ -1,5 +1,7 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using PeerLibrary.Data;
 using PeerLibrary.Settings;
 using PeerLibrary.TokenProviders;
 using PeerLibrary.UI;
@@ -14,6 +16,7 @@ namespace PeerLibrary.Configuration
         {
             return services
                 .AddJsonConfiguration("peerlibrary.settings.json").Configure<HubSettings>("hub")
+                .AddDbContext<PeerDbContext>()
                 .AddSingleton<ITokenProvider, RopcTokenProvider>()
                 .AddTransient<IUI, TUI>()
                 .AddTransient<IHubClient, HubClient>();
@@ -33,6 +36,11 @@ namespace PeerLibrary.Configuration
 
         public static Task StartHubClient(this IServiceProvider serviceProvider)
         {
+            using (var scope = serviceProvider.GetServiceOrThrow<IServiceScopeFactory>().CreateAsyncScope())
+            {
+                scope.ServiceProvider.GetRequiredService<PeerDbContext>().Database.MigrateAsync();
+            }
+
             return serviceProvider.GetServiceOrThrow<IHubClient>().ExecuteDispose();
         }
 
