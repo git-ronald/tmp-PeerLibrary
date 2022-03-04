@@ -34,11 +34,14 @@ namespace PeerLibrary.Configuration
             return new JsonConfigurationBuilder(services, configRoot);
         }
 
-        public static Task StartHubClient(this IServiceProvider serviceProvider)
+        public static Task StartHubClient(this IServiceProvider serviceProvider, Action<AsyncServiceScope>? configScoped = null)
         {
             using (var scope = serviceProvider.GetServiceOrThrow<IServiceScopeFactory>().CreateAsyncScope())
             {
                 scope.ServiceProvider.GetRequiredService<PeerDbContext>().Database.MigrateAsync();
+
+                // TODO: for now, it's used so that LocalStation can migrate TestApp DB. In the future that should be done here, using reflection.
+                configScoped?.Invoke(scope);
             }
 
             return serviceProvider.GetServiceOrThrow<IHubClient>().ExecuteDispose();
