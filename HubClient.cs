@@ -2,10 +2,13 @@
 using CoreLibrary.PeerInterface;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
+using PeerLibrary.ConstantValues;
+using PeerLibrary.Data;
 using PeerLibrary.Settings;
 using PeerLibrary.TokenProviders;
 using PeerLibrary.UI;
 using System.Text;
+using System.Text.Json;
 
 namespace PeerLibrary
 {
@@ -15,13 +18,15 @@ namespace PeerLibrary
         private readonly PeerSettings _peerSettings;
         private readonly IUI _ui;
         private readonly HubConnection? _connection;
+        private readonly PeerDbContext _peerDbContext;
 
-        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider)
+        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext)
         {
             _hubSettings = hubOptions.Value;
             _peerSettings = peerOptions.Value;
             _ui = ui;
             _connection = BuildHubConnection(tokenProvider);
+            _peerDbContext = peerDbContext;
         }
 
         private HubConnection? BuildHubConnection(ITokenProvider tokenProvider)
@@ -59,15 +64,7 @@ namespace PeerLibrary
             });
 
             // TODO: protect incoming calls with extra "secret"
-            connection.On("RequestPeerRegistrationInfo", () =>
-            {
-                _ui.WriteTimeAndLine($"Peer registration info requested.");
-                return Invoke("PeerRegistrationInfoResponse", new PeerRegistrationInfo
-                {
-                    PeerId = _peerSettings.PeerId.Value,
-                    PeerName = _peerSettings.PeerName
-                });
-            });
+            connection.On("RequestPeerRegistrationInfo", RequestPeerRegistrationInfo);
 
 
             // TODO the rest is test code. Delete it at some time...
@@ -107,6 +104,29 @@ namespace PeerLibrary
             _ui.WriteLine(message);
 
             await ScheduleConnectAttempts();
+        }
+
+        private async Task RequestPeerRegistrationInfo()
+        {
+            if (!_peerSettings.PeerId.HasValue)
+            {
+                return;
+            }
+
+            string? settingValue = await _peerDbContext.AddSettingIfAbsent(SettingKeys.PeerNodeId, () => Guid.NewGuid());
+            if (settingValue == null)
+            {
+                return;
+            }
+
+            _ui.WriteTimeAndLine($"Peer registration info requested.");
+
+            await Invoke("PeerRegistrationInfoResponse", new PeerRegistrationInfo
+            {
+                PeerId = _peerSettings.PeerId.Value,
+                PeerName = _peerSettings.PeerName,
+                PeerNodeId = JsonSerializer.Deserialize<Guid>(settingValue)
+            });
         }
 
         protected override async Task<IAsyncDisposable> Execute()
