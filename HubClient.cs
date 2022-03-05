@@ -215,6 +215,7 @@ namespace PeerLibrary
             _ui.WriteTimeAndLine("Hub connection started.");
         }
 
+        // TODO NOW: this should be called by TimeCompartmentScheduleService. Bug: right now the UI doesn't call ReadKey from IUI.
         private async Task ScheduleConnectAttempts()
         {
             if (_connection is null)

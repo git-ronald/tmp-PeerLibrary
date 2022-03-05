@@ -36,7 +36,7 @@ namespace PeerLibrary.Configuration
 
         public static Task StartHubClient(this IServiceProvider serviceProvider, Action<AsyncServiceScope>? configScoped = null)
         {
-            using (var scope = serviceProvider.GetServiceOrThrow<IServiceScopeFactory>().CreateAsyncScope())
+            using (var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope())
             {
                 scope.ServiceProvider.GetRequiredService<PeerDbContext>().Database.MigrateAsync();
 
@@ -44,21 +44,7 @@ namespace PeerLibrary.Configuration
                 configScoped?.Invoke(scope);
             }
 
-            return serviceProvider.GetServiceOrThrow<IHubClient>().ExecuteDispose();
-        }
-
-        public static TService GetServiceOrThrow<TService>(this IServiceProvider serviceProvider)
-        {
-            return serviceProvider.GetServiceOrThrow<TService>(() => new Exception($"Failed to create {typeof(TService).Name}"));
-        }
-        public static TService GetServiceOrThrow<TService>(this IServiceProvider serviceProvider, Func<Exception> getException)
-        {
-            TService? service = serviceProvider.GetService<TService>();
-            if (service is null)
-            {
-                throw getException();
-            }
-            return service;
+            return serviceProvider.GetRequiredService<IHubClient>().ExecuteDispose();
         }
     }
 }
