@@ -1,5 +1,6 @@
 ﻿using CoreLibrary;
 using CoreLibrary.PeerInterface;
+using CoreLibrary.SchedulerService;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
 using PeerLibrary.ConstantValues;
@@ -19,14 +20,18 @@ namespace PeerLibrary
         private readonly IUI _ui;
         private readonly HubConnection? _connection;
         private readonly PeerDbContext _peerDbContext;
+        private readonly ISchedulerService _scheduler;
 
-        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext)
+        private readonly CancellationTokenSource _cancellation = new();
+
+        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext, ISchedulerService scheduler)
         {
             _hubSettings = hubOptions.Value;
             _peerSettings = peerOptions.Value;
             _ui = ui;
             _connection = BuildHubConnection(tokenProvider);
             _peerDbContext = peerDbContext;
+            _scheduler = scheduler;
         }
 
         private HubConnection? BuildHubConnection(ITokenProvider tokenProvider)
@@ -143,6 +148,7 @@ namespace PeerLibrary
             _ui.WriteLine();
 
             await SendTestRequest();
+            var _ = _scheduler.Start(_cancellation.Token);
             await WaitForUserInput();
 
             return this;
@@ -249,6 +255,9 @@ namespace PeerLibrary
 
         public async ValueTask DisposeAsync()
         {
+            _cancellation.Cancel();
+            _cancellation.Dispose();
+
             if (_connection is not null)
             {
                 await _connection.StopAsync();
