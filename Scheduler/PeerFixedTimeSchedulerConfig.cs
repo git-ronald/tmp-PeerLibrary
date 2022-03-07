@@ -2,7 +2,7 @@
 
 namespace PeerLibrary.Scheduler
 {
-    public class PeerFixedTimeSchedulerConfig : ISchedulerConfig<object, TimeSpan>
+    public class PeerFixedTimeSchedulerConfig : ISchedulerConfig<SchedulerState, TimeSpan>
     {
         public PeerFixedTimeSchedulerConfig()
         {
@@ -16,6 +16,6 @@ namespace PeerLibrary.Scheduler
             };
         }
 
-        public Dictionary<TimeSpan, List<ScheduledTaskDelegate<object>>> Tasks { get; } = new();
+        public Dictionary<TimeSpan, List<ScheduledTaskDelegate<SchedulerState>>> Tasks { get; } = new();
     }
 }

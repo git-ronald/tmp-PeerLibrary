@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
 using PeerLibrary.ConstantValues;
 using PeerLibrary.Data;
+using PeerLibrary.Scheduler;
 using PeerLibrary.Settings;
 using PeerLibrary.TokenProviders;
 using PeerLibrary.UI;
@@ -20,11 +21,12 @@ namespace PeerLibrary
         private readonly IUI _ui;
         private readonly HubConnection? _connection;
         private readonly PeerDbContext _peerDbContext;
-        private readonly ISchedulerService _scheduler;
+        private readonly ISchedulerService<SchedulerState> _scheduler;
 
         private readonly CancellationTokenSource _cancellation = new();
+        private readonly SchedulerState _schedulerState = new();
 
-        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext, ISchedulerService scheduler)
+        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext, ISchedulerService<SchedulerState> scheduler)
         {
             _hubSettings = hubOptions.Value;
             _peerSettings = peerOptions.Value;
@@ -148,7 +150,7 @@ namespace PeerLibrary
             _ui.WriteLine();
 
             await SendTestRequest();
-            var _ = _scheduler.Start(_cancellation.Token);
+            var _ = _scheduler.Start(_cancellation.Token, _schedulerState);
             await WaitForUserInput();
 
             return this;
@@ -229,12 +231,12 @@ namespace PeerLibrary
                 return;
             }
 
-            await Task.Delay(_hubSettings.TryConnectInterval * 1000);
+            //await Task.Delay(_hubSettings.TryConnectInterval * 1000);
 
-            if (_connection.State == HubConnectionState.Disconnected)
-            {
-                await SendTestRequest();
-            }
+            //if (_connection.State == HubConnectionState.Disconnected)
+            //{
+            //    await SendTestRequest();
+            //}
         }
 
         private async Task WaitForUserInput()

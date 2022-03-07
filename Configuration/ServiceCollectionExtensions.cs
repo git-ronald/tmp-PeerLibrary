@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PeerLibrary.Data;
+using PeerLibrary.Scheduler;
 using PeerLibrary.Settings;
 using PeerLibrary.TokenProviders;
 using PeerLibrary.UI;
@@ -18,7 +19,7 @@ namespace PeerLibrary.Configuration
             return services
                 .AddJsonConfiguration("peerlibrary.settings.json").Configure<HubSettings>("hub")
                 .AddDbContext<PeerDbContext>()
-                .AddTransient<ISchedulerService, SchedulerService>()
+                .AddTransient<ISchedulerService<SchedulerState>, SchedulerService<SchedulerState>>()
                 .AddSingleton<ITokenProvider, RopcTokenProvider>()
                 .AddTransient<IUI, TUI>()
                 .AddTransient<IHubClient, HubClient>();

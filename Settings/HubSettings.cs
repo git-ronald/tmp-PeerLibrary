@@ -1,4 +1,6 @@
-﻿namespace PeerLibrary.Settings
+﻿using CoreLibrary;
+
+namespace PeerLibrary.Settings
 {
     internal class HubSettings
     {
@@ -7,6 +9,6 @@
         public string ClientId { get; set; } = String.Empty;
         public string Username { get; set; } = String.Empty;
         public string Password { get; set; } = String.Empty;
-        public int TryConnectInterval { get; set; }
+        public TimeCompartments TryConnectInterval { get; set; }
     }
 }
