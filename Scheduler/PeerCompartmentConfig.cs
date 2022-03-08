@@ -1,24 +1,28 @@
 ﻿using CoreLibrary;
+using CoreLibrary.Helpers;
 using CoreLibrary.SchedulerService;
 
 namespace PeerLibrary.Scheduler
 {
     public class PeerCompartmentConfig : ISchedulerConfig<TimeCompartments>
     {
-        public virtual Dictionary<TimeCompartments, SchedulerTaskList> BuildSchedule<TState>(TState? state = default(TState)) where TState : class
-        {
-            Dictionary<TimeCompartments, SchedulerTaskList> schedule = new();
-            schedule[TimeCompartments.EveryMinute] = new()
-            {
-                stop => ScheduleEveryMinute(stop, state)
-            };
-            schedule[TimeCompartments.Every2Minutes] = new()
-            {
-                stop => ScheduleEvery2Minutes(stop, state)
-            };
+        public Dictionary<TimeCompartments, SchedulerTaskList> Schedule { get; } = new();
 
-            return schedule;
+        public virtual Dictionary<TimeCompartments, SchedulerTaskList> BuildSchedule(SchedulerState state)
+        {
+            //Schedule.Ensure(TimeCompartments.EveryMinute).Add(
+            //    cancel => ScheduleEveryMinute(cancel, state));
+
+            //Schedule.Ensure(TimeCompartments.Every2Minutes).Add(
+            //    cancel => ScheduleEvery2Minutes(cancel, state));
+
+            return Schedule;
         }
+
+        //private Task AttemptHubConnection(CancellationToken cancellation, SchedulerState state)
+        //{
+        //    return Task.CompletedTask;
+        //}
 
         private Task ScheduleEveryMinute(CancellationToken stoppingToken, object? state)
         {

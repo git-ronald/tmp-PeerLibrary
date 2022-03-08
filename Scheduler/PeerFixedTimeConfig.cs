@@ -1,25 +1,25 @@
-﻿using CoreLibrary.SchedulerService;
+﻿using CoreLibrary.Helpers;
+using CoreLibrary.SchedulerService;
 
 namespace PeerLibrary.Scheduler
 {
-    public class PeerFixedTimeConfig : ISchedulerConfig<TimeSpan> //IFixedTimeConfig
+    public class PeerFixedTimeConfig : ISchedulerConfig<TimeSpan>
     {
-        public virtual Dictionary<TimeSpan, SchedulerTaskList> BuildSchedule<TState>(TState? state = default(TState)) where TState : class
+        public Dictionary<TimeSpan, SchedulerTaskList> Schedule { get; } = new();
+
+        public virtual Dictionary<TimeSpan, SchedulerTaskList> BuildSchedule(SchedulerState _)
         {
-            DateTime date = DateTime.UtcNow.AddMinutes(1);
-            TimeSpan nextEvent = new TimeSpan(date.Hour, date.Minute, 0);
+            //DateTime date = DateTime.UtcNow.AddMinutes(1);
+            //TimeSpan nextEvent = new TimeSpan(date.Hour, date.Minute, 0);
 
-            Dictionary<TimeSpan, SchedulerTaskList> schedule = new();
-            schedule[nextEvent] = new()
-            {
-                token =>
-                {
-                    Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Fixed time by PeerLibrary {nextEvent}");
-                    return Task.CompletedTask;
-                }
-            };
+            //Schedule.Ensure(nextEvent).Add(
+            //    token =>
+            //    {
+            //        Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Fixed time by PeerLibrary {nextEvent}");
+            //        return Task.CompletedTask;
+            //    });
 
-            return schedule;
+            return Schedule;
         }
     }
 }
