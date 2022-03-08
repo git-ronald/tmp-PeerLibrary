@@ -21,12 +21,14 @@ namespace PeerLibrary
         private readonly IUI _ui;
         private readonly HubConnection? _connection;
         private readonly PeerDbContext _peerDbContext;
-        private readonly ISchedulerService<SchedulerState> _scheduler;
+        private readonly ISchedulerService _scheduler;
+        private readonly ISchedulerConfig<TimeSpan> _fixedTimeSchedulerConfig;
+        private readonly ISchedulerConfig<TimeCompartments> _compartmentSchedulerConfig;
 
         private readonly CancellationTokenSource _cancellation = new();
         private readonly SchedulerState _schedulerState = new();
 
-        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext, ISchedulerService<SchedulerState> scheduler)
+        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext, ISchedulerService scheduler, ISchedulerConfig<TimeSpan> fixedTimeSchedulerConfig, ISchedulerConfig<TimeCompartments> compartmentSchedulerConfig)
         {
             _hubSettings = hubOptions.Value;
             _peerSettings = peerOptions.Value;
@@ -34,6 +36,8 @@ namespace PeerLibrary
             _connection = BuildHubConnection(tokenProvider);
             _peerDbContext = peerDbContext;
             _scheduler = scheduler;
+            _fixedTimeSchedulerConfig = fixedTimeSchedulerConfig;
+            _compartmentSchedulerConfig = compartmentSchedulerConfig;
         }
 
         private HubConnection? BuildHubConnection(ITokenProvider tokenProvider)
@@ -150,7 +154,11 @@ namespace PeerLibrary
             _ui.WriteLine();
 
             await SendTestRequest();
-            var _ = _scheduler.Start(_cancellation.Token, _schedulerState);
+
+            var fixedTimeSchedule = _fixedTimeSchedulerConfig.BuildSchedule(_schedulerState);
+            var compartmentSchedule = _compartmentSchedulerConfig.BuildSchedule(_schedulerState);
+            var _ = _scheduler.Start(_cancellation.Token, fixedTimeSchedule, compartmentSchedule);
+
             await WaitForUserInput();
 
             return this;
