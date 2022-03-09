@@ -1,4 +1,5 @@
 ﻿using CoreLibrary;
+using CoreLibrary.Helpers;
 using CoreLibrary.PeerInterface;
 using CoreLibrary.SchedulerService;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -21,12 +22,14 @@ namespace PeerLibrary
         private readonly IUI _ui;
         private readonly HubConnection? _connection;
         private readonly PeerDbContext _peerDbContext;
-        private readonly ISchedulerService<SchedulerState> _scheduler;
+        private readonly ISchedulerService _scheduler;
+        private readonly ISchedulerConfig<TimeSpan> _fixedTimeSchedulerConfig;
+        private readonly ISchedulerConfig<TimeCompartments> _compartmentSchedulerConfig;
 
         private readonly CancellationTokenSource _cancellation = new();
         private readonly SchedulerState _schedulerState = new();
 
-        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext, ISchedulerService<SchedulerState> scheduler)
+        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext, ISchedulerService scheduler, ISchedulerConfig<TimeSpan> fixedTimeSchedulerConfig, ISchedulerConfig<TimeCompartments> compartmentSchedulerConfig)
         {
             _hubSettings = hubOptions.Value;
             _peerSettings = peerOptions.Value;
@@ -34,6 +37,8 @@ namespace PeerLibrary
             _connection = BuildHubConnection(tokenProvider);
             _peerDbContext = peerDbContext;
             _scheduler = scheduler;
+            _fixedTimeSchedulerConfig = fixedTimeSchedulerConfig;
+            _compartmentSchedulerConfig = compartmentSchedulerConfig;
         }
 
         private HubConnection? BuildHubConnection(ITokenProvider tokenProvider)
@@ -99,7 +104,7 @@ namespace PeerLibrary
             });
         }
 
-        private async Task OnonnectionClosed(Exception? ex)
+        private Task OnonnectionClosed(Exception? ex)
         {
             StringBuilder message = new($"{DateTime.Now} Hub connection closed");
             if (ex is not null)
@@ -110,7 +115,9 @@ namespace PeerLibrary
             message.Append('.');
             _ui.WriteLine(message);
 
-            await ScheduleConnectAttempts();
+            //await ScheduleConnectAttempts();
+            _schedulerState.ConnectionPending = true;
+            return Task.CompletedTask;
         }
 
         private async Task RequestPeerRegistrationInfo()
@@ -150,7 +157,7 @@ namespace PeerLibrary
             _ui.WriteLine();
 
             await SendTestRequest();
-            var _ = _scheduler.Start(_cancellation.Token, _schedulerState);
+            StartScheduler();
             await WaitForUserInput();
 
             return this;
@@ -169,6 +176,24 @@ namespace PeerLibrary
                     return;
                 }
             }
+        }
+
+        private void StartScheduler()
+        {
+            var fixedTimeSchedule = _fixedTimeSchedulerConfig.BuildSchedule(_schedulerState);
+
+            var compartmentSchedule = _compartmentSchedulerConfig.BuildSchedule(_schedulerState);
+            compartmentSchedule.Ensure(TimeCompartments.EveryMinute).Add(
+                _ =>
+                {
+                    if (_schedulerState.ConnectionPending)
+                    {
+                        return SendTestRequest();
+                    }
+                    return Task.CompletedTask;
+                });
+
+            var _ = _scheduler.Start(_cancellation.Token, fixedTimeSchedule, compartmentSchedule);
         }
 
         private Task SendTestRequest()
@@ -197,17 +222,21 @@ namespace PeerLibrary
                     _ui.WriteLine($"Failed to invoke {methodName} due to closed connection.");
                     return;
                 }
+
                 await invoke(_connection, methodName);
+                _schedulerState.ConnectionPending = false;
             }
             catch (HttpRequestException)
             {
                 _ui.WriteLine($"Failure connecting to hub.");
-                await ScheduleConnectAttempts();
+                //await ScheduleConnectAttempts();
+                _schedulerState.ConnectionPending = true;
             }
             catch (Exception ex)
             {
                 _ui.WriteLine($"Failed starting connection: {ex.Message}");
-                await ScheduleConnectAttempts();
+                //await ScheduleConnectAttempts();
+                _schedulerState.ConnectionPending = true;
             }
         }
 
@@ -224,20 +253,20 @@ namespace PeerLibrary
         }
 
         // TODO NOW: this should be called by TimeCompartmentScheduleService. Bug: right now the UI doesn't call ReadKey from IUI.
-        private async Task ScheduleConnectAttempts()
-        {
-            if (_connection is null)
-            {
-                return;
-            }
+        //private async Task ScheduleConnectAttempts()
+        //{
+        //    if (_connection is null)
+        //    {
+        //        return;
+        //    }
 
-            //await Task.Delay(_hubSettings.TryConnectInterval * 1000);
+        //    //await Task.Delay(_hubSettings.TryConnectInterval * 1000);
 
-            //if (_connection.State == HubConnectionState.Disconnected)
-            //{
-            //    await SendTestRequest();
-            //}
-        }
+        //    //if (_connection.State == HubConnectionState.Disconnected)
+        //    //{
+        //    //    await SendTestRequest();
+        //    //}
+        //}
 
         private async Task WaitForUserInput()
         {
@@ -248,7 +277,7 @@ namespace PeerLibrary
                 {
                     break;
                 }
-                if (key.Key == ConsoleKey.Enter && _connection?.State == HubConnectionState.Disconnected)
+                if (key.Key == ConsoleKey.Enter)
                 {
                     await SendTestRequest();
                 }
