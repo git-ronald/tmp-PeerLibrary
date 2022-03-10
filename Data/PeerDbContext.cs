@@ -7,10 +7,14 @@ namespace PeerLibrary.Data
 {
     public class PeerDbContext : DbContext
     {
+        // TODO: in the future make GenericRepository and make PeerDbContext internal
+        
         public DbSet<Setting> Settings => Set<Setting>();
 
-        // TODO: in the future make GenericRepository and make PeerDbContext internal
-        public async Task<string?> AddSettingIfAbsent(object key, Func<object> getValue)
+        public Task<string?> UpdateSetting(object key, object value) => AddSettingIfAbsent(key, () => value, false);
+
+        public Task<string?> AddSettingIfAbsent(object key, Func<object> getValue) => AddSettingIfAbsent(key, getValue, true);
+        private async Task<string?> AddSettingIfAbsent(object key, Func<object> getValue, bool setNewValueOnly)
         {
             string? stringKey = key.ToString();
             if (stringKey is null)
@@ -19,21 +23,29 @@ namespace PeerLibrary.Data
             }
 
             var setting = await Settings.FirstOrDefaultAsync(s => s.Key == stringKey);
-            if (setting is not null)
+            if (setting is null)
             {
+                string stringValue = JsonSerializer.Serialize(getValue());
+                stringValue ??= String.Empty;
+
+                await Settings.AddAsync(new Setting { Key = stringKey, Value = stringValue });
+                await SaveChangesAsync();
+                return stringValue;
+            }
+            else
+            {
+                if (setNewValueOnly)
+                {
+                    return setting.Value;
+                }
+
+                string stringValue = JsonSerializer.Serialize(getValue());
+                stringValue ??= String.Empty;
+
+                setting.Value = stringValue;
+                await SaveChangesAsync();
                 return setting.Value;
             }
-
-            string stringValue = JsonSerializer.Serialize(getValue());
-            if (String.IsNullOrEmpty(stringValue))
-            {
-                return null;
-            }
-
-            await Settings.AddAsync(new Setting { Key = stringKey, Value = stringValue });
-            await SaveChangesAsync();
-
-            return stringValue;
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

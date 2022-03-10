@@ -76,7 +76,7 @@ namespace PeerLibrary
             });
 
             // TODO: protect incoming calls with extra "secret"
-            connection.On("RequestPeerRegistrationInfo", RequestPeerRegistrationInfo);
+            connection.On<TimeSpan>("RequestPeerRegistrationInfo", RequestPeerRegistrationInfo);
 
 
             // TODO the rest is test code. Delete it at some time...
@@ -120,7 +120,7 @@ namespace PeerLibrary
             return Task.CompletedTask;
         }
 
-        private async Task RequestPeerRegistrationInfo()
+        private async Task RequestPeerRegistrationInfo(TimeSpan suggestedSignOfLifeEvent)
         {
             if (!_peerSettings.PeerId.HasValue)
             {
@@ -133,13 +133,18 @@ namespace PeerLibrary
                 return;
             }
 
+            await _peerDbContext.UpdateSetting(SettingKeys.SignOfLifeEvent, suggestedSignOfLifeEvent);
+
             _ui.WriteTimeAndLine($"Peer registration info requested.");
 
+            // TODO: also provide ConfirmedSignOfLifeEvent PeerRegistrationInfo 
             await Invoke("PeerRegistrationInfoResponse", new PeerRegistrationInfo
             {
                 PeerId = _peerSettings.PeerId.Value,
                 PeerName = _peerSettings.PeerName,
-                PeerNodeId = JsonSerializer.Deserialize<Guid>(settingValue)
+                PeerNodeId = JsonSerializer.Deserialize<Guid>(settingValue),
+                // Simpy pass back suggestedSignOfLifeEvent. For the receiving hub it will simply indicate that the peer has indeed received the value and has registered it locally (in Settings).
+                ConfirmedSignOfLifeEvent = suggestedSignOfLifeEvent
             });
         }
 
