@@ -14,16 +14,6 @@ namespace PeerLibrary.Scheduler
 
         public virtual Task<Dictionary<TimeSpan, SchedulerTaskList>> BuildSchedule(SchedulerState _)
         {
-            //DateTime date = DateTime.UtcNow.AddMinutes(1);
-            //TimeSpan nextEvent = new TimeSpan(date.Hour, date.Minute, 0);
-
-            //Schedule.Ensure(nextEvent).Add(
-            //    token =>
-            //    {
-            //        Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Fixed time by PeerLibrary {nextEvent}");
-            //        return Task.CompletedTask;
-            //    });
-
             return Task.FromResult(Schedule);
         }
     }

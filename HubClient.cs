@@ -52,7 +52,7 @@ namespace PeerLibrary
             }
 
             IHubConnectionBuilder connectionBuilder = new HubConnectionBuilder()
-                .WithUrl($"{_hubSettings.HubUrl}?clienttype=backend", options =>
+                .WithUrl(_hubSettings.HubUrl, options =>
                 {
                     options.AccessTokenProvider = tokenProvider.GetToken;
                 })
@@ -73,38 +73,13 @@ namespace PeerLibrary
 
             connection.Closed += OnonnectionClosed;
 
-            connection.On(HubMessages.TestResponse, () => 
+            connection.On(HubToClientMessages.TestResponse, () => 
             {
                 _ui.WriteTimeAndLine($"Reveived test response from {_hubSettings.HubUrl}.");
             });
 
             // TODO: protect incoming calls with extra "secret"
-            connection.On<TimeSpan>(HubMessages.RequestPeerRegistrationInfo, RequestPeerRegistrationInfo);
-
-
-            //// TODO the rest is test code. Delete it at some time...
-
-            //connection.On<List<string>>("PeerRequest", async messages =>
-            //{
-            //    messages.Add($"{DateTime.Now:HH:mm:ss} {Guid.NewGuid()} Peer");
-            //    await Invoke("PeerResponse", messages);
-
-            //    _ui.WriteLine();
-            //    _ui.WriteTimeAndLine($"Hub called PeerRequest:");
-
-            //    foreach (string msg in messages)
-            //    {
-            //        _ui.WriteLine(msg);
-            //    }
-            //});
-
-            //connection.On<List<string>>("HubResponse", messages =>
-            //{
-            //    _ui.WriteLine();
-            //    _ui.WriteTimeAndLine("Hub response");
-            //    _ui.WriteLine($"Message count: {messages.Count}");
-            //    _ui.WriteLine($"Last message: {messages.LastOrDefault()}");
-            //});
+            connection.On<TimeSpan>(HubToClientMessages.RequestPeerRegistrationInfo, RequestPeerRegistrationInfo);
         }
 
         private Task OnonnectionClosed(Exception? ex)
@@ -228,15 +203,6 @@ namespace PeerLibrary
                     TimeSpan fixedTime = signOfLifeEvent.Add(TimeSpan.FromHours(index * 6));
                     fixedTimeSchedule.Ensure(fixedTime).Add(NotifySignOfLife);
                 }
-                //for (int index = 0; index < 4; index++)
-                //{
-                //    TimeSpan fixedTime = signOfLifeEvent.Add(TimeSpan.FromHours(index * 6));
-                //    fixedTimeSchedule.Ensure(fixedTime).Add(NotifySignOfLife);
-                //}
-                //var secondEvent = signOfLifeEvent.Add(TimeSpan.FromHours(12));
-
-                //fixedTimeSchedule.Ensure(signOfLifeEvent).Add(NotifySignOfLife);
-                //fixedTimeSchedule.Ensure(secondEvent).Add(NotifySignOfLife);
             }
 
             var compartmentSchedule = await _compartmentSchedulerConfig.BuildSchedule(_schedulerState);
@@ -256,13 +222,13 @@ namespace PeerLibrary
         private Task NotifySignOfLife(CancellationToken cancellation)
         {
             _ui.WriteTimeAndLine("Notify sign of life.");
-            return Invoke(HubMessages.NotifySignOfLife, cancellation);
+            return Invoke(ClientToHubMessages.NotifySignOfLife, cancellation);
         }
 
         private Task SendTestRequest()
         {
             _ui.WriteTimeAndLine("Send test request...");
-            return Invoke(HubMessages.TestRequest);
+            return Invoke(ClientToHubMessages.TestRequest);
         }
 
         private Task Invoke(string methodName, CancellationToken cancel = default) => TryInvoke(methodName, (c, n) => c.InvokeAsync(n, cancel));
