@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PeerLibrary.Data;
-using PeerLibrary.Scheduler;
 using PeerLibrary.Settings;
 using PeerLibrary.TokenProviders;
 using PeerLibrary.UI;

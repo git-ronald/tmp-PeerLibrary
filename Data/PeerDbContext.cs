@@ -11,44 +11,6 @@ namespace PeerLibrary.Data
         
         public DbSet<Setting> Settings => Set<Setting>();
 
-        //public async Task<bool> UpdateSetting(object key, object value) => (await AddSettingIfAbsent(key, () => value, false)).Updated;
-
-        //public async Task<string?> AddSettingIfAbsent(object key, Func<object> getValue) => (await AddSettingIfAbsent(key, getValue, true)).Value;
-        //private async Task<(string? Value, bool Updated)> AddSettingIfAbsent(object key, Func<object> getValue, bool setNewValueOnly)
-        //{
-        //    string? stringKey = key.ToString();
-        //    if (stringKey is null)
-        //    {
-        //        return (null, false);
-        //    }
-
-        //    var setting = await Settings.FirstOrDefaultAsync(s => s.Key == stringKey);
-        //    if (setting is null)
-        //    {
-        //        string stringValue = JsonSerializer.Serialize(getValue());
-        //        stringValue ??= String.Empty;
-
-        //        await Settings.AddAsync(new Setting { Key = stringKey, Value = stringValue });
-        //        await SaveChangesAsync();
-        //        return (stringValue, true);
-        //    }
-        //    else
-        //    {
-        //        if (setNewValueOnly)
-        //        {
-        //            return (setting.Value, false);
-        //        }
-
-        //        string stringValue = JsonSerializer.Serialize(getValue());
-        //        stringValue ??= String.Empty;
-        //        bool updated = (stringValue != setting.Value);
-
-        //        setting.Value = stringValue;
-        //        await SaveChangesAsync();
-        //        return (setting.Value, updated);
-        //    }
-        //}
-
         public async Task<T?> GetSetting<T>(object key)
         {
             string? stringKey = key.ToString();
