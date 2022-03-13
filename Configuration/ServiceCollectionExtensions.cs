@@ -18,7 +18,7 @@ namespace PeerLibrary.Configuration
         {
             return services
                 .AddJsonConfiguration("peerlibrary.settings.json").Configure<HubSettings>("hub")
-                .AddDbContext<PeerDbContext>()
+                .AddDbContext<PeerDbContext>(ServiceLifetime.Transient)
                 .AddTransient<ISchedulerService, SchedulerService>()
                 .AddSingleton<ITokenProvider, RopcTokenProvider>()
                 .AddTransient<IUI, TUI>()

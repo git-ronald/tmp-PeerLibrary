@@ -8,7 +8,7 @@ namespace PeerLibrary.Scheduler
     {
         public Dictionary<TimeCompartments, SchedulerTaskList> Schedule { get; } = new();
 
-        public virtual Dictionary<TimeCompartments, SchedulerTaskList> BuildSchedule(SchedulerState state)
+        public virtual Task<Dictionary<TimeCompartments, SchedulerTaskList>> BuildSchedule(SchedulerState state)
         {
             //Schedule.Ensure(TimeCompartments.EveryMinute).Add(
             //    cancel => ScheduleEveryMinute(cancel, state));
@@ -16,7 +16,7 @@ namespace PeerLibrary.Scheduler
             //Schedule.Ensure(TimeCompartments.Every2Minutes).Add(
             //    cancel => ScheduleEvery2Minutes(cancel, state));
 
-            return Schedule;
+            return Task.FromResult(Schedule);
         }
 
         //private Task AttemptHubConnection(CancellationToken cancellation, SchedulerState state)

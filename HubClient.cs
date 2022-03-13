@@ -3,6 +3,7 @@ using CoreLibrary.Helpers;
 using CoreLibrary.PeerInterface;
 using CoreLibrary.SchedulerService;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using PeerLibrary.ConstantValues;
 using PeerLibrary.Data;
@@ -11,7 +12,6 @@ using PeerLibrary.Settings;
 using PeerLibrary.TokenProviders;
 using PeerLibrary.UI;
 using System.Text;
-using System.Text.Json;
 
 namespace PeerLibrary
 {
@@ -25,11 +25,12 @@ namespace PeerLibrary
         private readonly ISchedulerService _scheduler;
         private readonly ISchedulerConfig<TimeSpan> _fixedTimeSchedulerConfig;
         private readonly ISchedulerConfig<TimeCompartments> _compartmentSchedulerConfig;
+        private readonly IServiceScopeFactory _scopeFactory;
 
-        private readonly CancellationTokenSource _cancellation = new();
         private readonly SchedulerState _schedulerState = new();
+        private CancellationTokenSource _cancellation = new();
 
-        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext, ISchedulerService scheduler, ISchedulerConfig<TimeSpan> fixedTimeSchedulerConfig, ISchedulerConfig<TimeCompartments> compartmentSchedulerConfig)
+        public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext, ISchedulerService scheduler, ISchedulerConfig<TimeSpan> fixedTimeSchedulerConfig, ISchedulerConfig<TimeCompartments> compartmentSchedulerConfig, IServiceScopeFactory scopeFactory)
         {
             _hubSettings = hubOptions.Value;
             _peerSettings = peerOptions.Value;
@@ -39,6 +40,7 @@ namespace PeerLibrary
             _scheduler = scheduler;
             _fixedTimeSchedulerConfig = fixedTimeSchedulerConfig;
             _compartmentSchedulerConfig = compartmentSchedulerConfig;
+            _scopeFactory = scopeFactory;
         }
 
         private HubConnection? BuildHubConnection(ITokenProvider tokenProvider)
@@ -115,37 +117,67 @@ namespace PeerLibrary
             message.Append('.');
             _ui.WriteLine(message);
 
-            //await ScheduleConnectAttempts();
             _schedulerState.ConnectionPending = true;
             return Task.CompletedTask;
         }
 
         private async Task RequestPeerRegistrationInfo(TimeSpan suggestedSignOfLifeEvent)
         {
-            if (!_peerSettings.PeerId.HasValue)
+            try
             {
-                return;
+                if (!_peerSettings.PeerId.HasValue)
+                {
+                    return;
+                }
+
+                bool save = false;
+                bool restartScheduler = false;
+
+                var scope = _scopeFactory.CreateScope();
+                using var peerDbContext = scope.ServiceProvider.GetRequiredService<PeerDbContext>();
+                Guid peerNodeId = await peerDbContext.GetSetting<Guid>(SettingKeys.PeerNodeId);
+                if (peerNodeId == Guid.Empty)
+                {
+                    peerNodeId = Guid.NewGuid();
+                    await peerDbContext.SetSetting(SettingKeys.PeerNodeId, peerNodeId);
+                    save = true;
+                }
+
+                TimeSpan signOfLifeEvent = await peerDbContext.GetSetting<TimeSpan>(SettingKeys.SignOfLifeEvent);
+                if (signOfLifeEvent == TimeSpan.Zero)
+                {
+                    signOfLifeEvent = suggestedSignOfLifeEvent;
+                    await peerDbContext.SetSetting(SettingKeys.SignOfLifeEvent, signOfLifeEvent);
+
+                    save = true;
+                    restartScheduler = true;
+                }
+
+                if (save)
+                {
+                    await peerDbContext.SaveChangesAsync();
+                }
+                if (restartScheduler)
+                {
+                    _cancellation.Cancel();
+                    _cancellation = new CancellationTokenSource();
+                    await StartScheduler();
+                }
+
+                _ui.WriteTimeAndLine($"Peer registration info requested.");
+
+                await Invoke("PeerRegistrationInfoResponse", new PeerRegistrationInfo
+                {
+                    PeerId = _peerSettings.PeerId.Value,
+                    PeerName = _peerSettings.PeerName,
+                    PeerNodeId = peerNodeId,
+                    ConfirmedSignOfLifeEvent = signOfLifeEvent
+                });
             }
-
-            string? settingValue = await _peerDbContext.AddSettingIfAbsent(SettingKeys.PeerNodeId, () => Guid.NewGuid());
-            if (settingValue == null)
+            catch (Exception ex)
             {
-                return;
+                _ui.WriteLine($"Failure in {nameof(RequestPeerRegistrationInfo)}: {ex.Message}");
             }
-
-            await _peerDbContext.UpdateSetting(SettingKeys.SignOfLifeEvent, suggestedSignOfLifeEvent);
-
-            _ui.WriteTimeAndLine($"Peer registration info requested.");
-
-            // TODO: also provide ConfirmedSignOfLifeEvent PeerRegistrationInfo 
-            await Invoke("PeerRegistrationInfoResponse", new PeerRegistrationInfo
-            {
-                PeerId = _peerSettings.PeerId.Value,
-                PeerName = _peerSettings.PeerName,
-                PeerNodeId = JsonSerializer.Deserialize<Guid>(settingValue),
-                // Simpy pass back suggestedSignOfLifeEvent. For the receiving hub it will simply indicate that the peer has indeed received the value and has registered it locally (in Settings).
-                ConfirmedSignOfLifeEvent = suggestedSignOfLifeEvent
-            });
         }
 
         protected override async Task<IAsyncDisposable> Execute()
@@ -162,7 +194,7 @@ namespace PeerLibrary
             _ui.WriteLine();
 
             await SendTestRequest();
-            StartScheduler();
+            await StartScheduler();
             await WaitForUserInput();
 
             return this;
@@ -183,11 +215,20 @@ namespace PeerLibrary
             }
         }
 
-        private void StartScheduler()
+        private async Task StartScheduler()
         {
-            var fixedTimeSchedule = _fixedTimeSchedulerConfig.BuildSchedule(_schedulerState);
+            var fixedTimeSchedule = await _fixedTimeSchedulerConfig.BuildSchedule(_schedulerState);
 
-            var compartmentSchedule = _compartmentSchedulerConfig.BuildSchedule(_schedulerState);
+            TimeSpan signOfLifeEvent = await _peerDbContext.GetSetting<TimeSpan>(SettingKeys.SignOfLifeEvent);
+            if (signOfLifeEvent != default)
+            {
+                var secondEvent = signOfLifeEvent.Add(TimeSpan.FromHours(12));
+
+                fixedTimeSchedule.Ensure(signOfLifeEvent).Add(NotifySignOfLife);
+                fixedTimeSchedule.Ensure(secondEvent).Add(NotifySignOfLife);
+            }
+
+            var compartmentSchedule = await _compartmentSchedulerConfig.BuildSchedule(_schedulerState);
             compartmentSchedule.Ensure(TimeCompartments.EveryMinute).Add(
                 _ =>
                 {
@@ -201,14 +242,20 @@ namespace PeerLibrary
             var _ = _scheduler.Start(_cancellation.Token, fixedTimeSchedule, compartmentSchedule);
         }
 
+        private Task NotifySignOfLife(CancellationToken cancellation)
+        {
+            _ui.WriteTimeAndLine("Notify sign of life.");
+            return Invoke("NotifySignOfLife", cancellation);
+        }
+
         private Task SendTestRequest()
         {
             _ui.WriteTimeAndLine("Send test request...");
             return Invoke("TestRequest");
         }
 
-        private Task Invoke(string methodName) => TryInvoke(methodName, (c, n) => c.InvokeAsync(n));
-        private Task Invoke<T>(string methodName, T arg) => TryInvoke(methodName, (c, n) => c.InvokeAsync<T>(n, arg));
+        private Task Invoke(string methodName, CancellationToken cancel = default) => TryInvoke(methodName, (c, n) => c.InvokeAsync(n, cancel));
+        private Task Invoke<T>(string methodName, T arg, CancellationToken cancel = default) => TryInvoke(methodName, (c, n) => c.InvokeAsync<T>(n, arg, cancel));
         private async Task TryInvoke(string methodName, Func<HubConnection, string, Task> invoke)
         {
             try
@@ -234,13 +281,11 @@ namespace PeerLibrary
             catch (HttpRequestException)
             {
                 _ui.WriteLine($"Failure connecting to hub.");
-                //await ScheduleConnectAttempts();
                 _schedulerState.ConnectionPending = true;
             }
             catch (Exception ex)
             {
                 _ui.WriteLine($"Failed starting connection: {ex.Message}");
-                //await ScheduleConnectAttempts();
                 _schedulerState.ConnectionPending = true;
             }
         }
@@ -256,22 +301,6 @@ namespace PeerLibrary
             await _connection.StartAsync();
             _ui.WriteTimeAndLine("Hub connection started.");
         }
-
-        // TODO NOW: this should be called by TimeCompartmentScheduleService. Bug: right now the UI doesn't call ReadKey from IUI.
-        //private async Task ScheduleConnectAttempts()
-        //{
-        //    if (_connection is null)
-        //    {
-        //        return;
-        //    }
-
-        //    //await Task.Delay(_hubSettings.TryConnectInterval * 1000);
-
-        //    //if (_connection.State == HubConnectionState.Disconnected)
-        //    //{
-        //    //    await SendTestRequest();
-        //    //}
-        //}
 
         private async Task WaitForUserInput()
         {

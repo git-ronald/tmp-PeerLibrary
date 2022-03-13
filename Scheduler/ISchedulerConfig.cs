@@ -4,6 +4,6 @@ namespace PeerLibrary.Scheduler
 {
     public interface ISchedulerConfig<TKey> where TKey : notnull
     {
-        Dictionary<TKey, SchedulerTaskList> BuildSchedule(SchedulerState state);
+        Task<Dictionary<TKey, SchedulerTaskList>> BuildSchedule(SchedulerState state);
     }
 }
