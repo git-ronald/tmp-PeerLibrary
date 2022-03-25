@@ -85,7 +85,7 @@ namespace PeerLibrary
         private Task OnonnectionClosed(Exception? ex)
         {
             StringBuilder message = new($"{DateTime.Now} Hub connection closed");
-            if (ex is not null)
+            if (ex != null)
             {
                 message.Append(": ");
                 message.Append(ex.Message);
@@ -237,7 +237,7 @@ namespace PeerLibrary
         {
             try
             {
-                if (_connection is null)
+                if (_connection == null)
                 {
                     return;
                 }
@@ -269,7 +269,7 @@ namespace PeerLibrary
 
         private async Task StartConnection()
         {
-            if (_connection is null)
+            if (_connection == null)
             {
                 return;
             }
@@ -300,7 +300,7 @@ namespace PeerLibrary
             _cancellation.Cancel();
             _cancellation.Dispose();
 
-            if (_connection is not null)
+            if (_connection != null)
             {
                 await _connection.StopAsync();
                 await _connection.DisposeAsync();

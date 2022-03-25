@@ -14,13 +14,13 @@ namespace PeerLibrary.Data
         public async Task<T?> GetSetting<T>(object key)
         {
             string? stringKey = key.ToString();
-            if (stringKey is null)
+            if (stringKey == null)
             {
                 return default;
             }
 
             Setting? setting = await Settings.AsNoTracking().FirstOrDefaultAsync(s => s.Key == stringKey);
-            if (setting is null)
+            if (setting == null)
             {
                 return default;
             }
@@ -31,13 +31,13 @@ namespace PeerLibrary.Data
         public async Task SetSetting(object key, object value)
         {
             string? stringKey = key.ToString();
-            if (stringKey is null)
+            if (stringKey == null)
             {
                 return;
             }
 
             var setting = await Settings.FirstOrDefaultAsync(s => s.Key == stringKey);
-            if (setting is null)
+            if (setting == null)
             {
                 setting = new Setting { Key = stringKey };
                 await AddAsync(setting);
