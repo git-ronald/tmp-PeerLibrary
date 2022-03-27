@@ -225,7 +225,7 @@ namespace PeerLibrary
             return Invoke(ClientToHubMessages.NotifySignOfLife, cancellation);
         }
 
-        private Task SendTestRequest()
+        private Task SendTestRequest() // NOTE: this is functional, so it's actually not temoprary
         {
             _ui.WriteTimeAndLine("Send test request...");
             return Invoke(ClientToHubMessages.TestRequest);
