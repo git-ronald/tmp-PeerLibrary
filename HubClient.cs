@@ -28,8 +28,10 @@ namespace PeerLibrary
         private readonly ISchedulerConfig<TimeCompartments> _compartmentSchedulerConfig;
         private readonly IServiceScopeFactory _scopeFactory;
 
+        private readonly Queue<(string Method, Func<HubConnection, string, Task> Call)> _pendingMessages = new();
         private readonly SchedulerState _schedulerState = new();
         private CancellationTokenSource _cancellation = new();
+
 
         public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext, ISchedulerService scheduler, ISchedulerConfig<TimeSpan> fixedTimeSchedulerConfig, ISchedulerConfig<TimeCompartments> compartmentSchedulerConfig, IServiceScopeFactory scopeFactory)
         {
@@ -73,13 +75,16 @@ namespace PeerLibrary
 
             connection.Closed += OnonnectionClosed;
 
-            connection.On(HubToClientMessages.TestResponse, () => 
+            connection.On(SignalrMessages.TestResponse, () => 
             {
                 _ui.WriteTimeAndLine($"Reveived test response from {_hubSettings.HubUrl}.");
             });
 
             // TODO: protect incoming calls with extra "secret"
-            connection.On<TimeSpan>(HubToClientMessages.RequestPeerRegistrationInfo, RequestPeerRegistrationInfo);
+
+            connection.On<TimeSpan>(SignalrMessages.RequestPeerRegistrationInfo, RequestPeerRegistrationInfo);
+            connection.On(SignalrMessages.PeerRegistrationConfirmed, PeerRegistrationConfirmed);
+            connection.On<string, object?>(SignalrMessages.PeerRequest, PeerRequest);
         }
 
         private Task OnonnectionClosed(Exception? ex)
@@ -142,7 +147,7 @@ namespace PeerLibrary
 
                 _ui.WriteTimeAndLine($"Peer registration info requested.");
 
-                await Invoke("PeerRegistrationInfoResponse", new PeerRegistrationInfo
+                await Invoke(SignalrMessages.PeerRegistrationInfoResponse, new PeerRegistrationInfo
                 {
                     PeerId = _peerSettings.PeerId.Value,
                     PeerName = _peerSettings.PeerName,
@@ -154,6 +159,30 @@ namespace PeerLibrary
             {
                 _ui.WriteLine($"Failure in {nameof(RequestPeerRegistrationInfo)}: {ex.Message}");
             }
+        }
+
+        private async Task PeerRegistrationConfirmed()
+        {
+            _ui.WriteTimeAndLine("Peer registration confirmed.");
+
+            while (_pendingMessages.Count > 0)
+            {
+                var message = _pendingMessages.Dequeue();
+                await TryInvoke(message.Method, message.Call);
+            }
+        }
+
+        private async Task PeerRequest(string method, object? data)
+        {
+            // TODO: create services here using...
+            // var scope = _scopeFactory.CreateScope();
+            
+            if (method == "DoSomething")
+            {
+                string answer = $"Hi, {data} is a nice number.";
+                await TryInvoke(SignalrMessages.PeerResponse, (c, n) => c.InvokeAsync(n, method, answer));
+            }
+            //await Invoke(ClientToHubMessages)
         }
 
         protected override async Task<IAsyncDisposable> Execute()
@@ -222,13 +251,13 @@ namespace PeerLibrary
         private Task NotifySignOfLife(CancellationToken cancellation)
         {
             _ui.WriteTimeAndLine("Notify sign of life.");
-            return Invoke(ClientToHubMessages.NotifySignOfLife, cancellation);
+            return Invoke(SignalrMessages.NotifySignOfLife, cancellation);
         }
 
         private Task SendTestRequest() // NOTE: this is functional, so it's actually not temoprary
         {
             _ui.WriteTimeAndLine("Send test request...");
-            return Invoke(ClientToHubMessages.TestRequest);
+            return Invoke(SignalrMessages.TestRequest);
         }
 
         private Task Invoke(string methodName, CancellationToken cancel = default) => TryInvoke(methodName, (c, n) => c.InvokeAsync(n, cancel));
@@ -245,6 +274,8 @@ namespace PeerLibrary
                 if (_connection.State == HubConnectionState.Disconnected)
                 {
                     await StartConnection();
+                    _pendingMessages.Enqueue((methodName, invoke));
+                    return;
                 }
                 if (_connection.State != HubConnectionState.Connected)
                 {
