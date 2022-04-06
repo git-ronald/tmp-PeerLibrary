@@ -179,8 +179,8 @@ namespace PeerLibrary
             
             if (method == "DoSomething")
             {
-                string answer = $"Hi, {data} is a very nice number.";
-                await Invoke(SignalrMessages.PeerResponse, answer);
+                string answer = $"Hi, {data} is a nice number.";
+                await TryInvoke(SignalrMessages.PeerResponse, (c, n) => c.InvokeAsync(n, method, answer));
             }
             //await Invoke(ClientToHubMessages)
         }
