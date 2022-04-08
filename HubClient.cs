@@ -1,7 +1,8 @@
 ﻿using CoreLibrary;
 using CoreLibrary.ConstantValues;
 using CoreLibrary.Helpers;
-using CoreLibrary.PeerInterface;
+using CoreLibrary.Interfaces;
+using CoreLibrary.Models;
 using CoreLibrary.SchedulerService;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
@@ -180,9 +181,8 @@ namespace PeerLibrary
             if (method == "DoSomething")
             {
                 string answer = $"Hi, {data} is a nice number.";
-                await TryInvoke(SignalrMessages.PeerResponse, (c, n) => c.InvokeAsync(n, method, answer));
+                await TryInvoke(SignalrMessages.PeerResponse, (cnn, method) => cnn.InvokeAsync(method, method, answer));
             }
-            //await Invoke(ClientToHubMessages)
         }
 
         protected override async Task<IAsyncDisposable> Execute()

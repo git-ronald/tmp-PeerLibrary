@@ -10,9 +10,9 @@ namespace PeerLibrary.TokenProviders.Models
 
             TokenInfo tokenInfo = new()
             {
-                AccessToken = tokenDict.GetOrThrow("access_token").ToStringValue(),
-                RefreshToken = tokenDict.GetOrThrow("refresh_token").ToStringValue(),
-                AccessTokenExpiration = now.AddSeconds(int.Parse(tokenDict.GetOrThrow("expires_in").ToStringValue())),
+                AccessToken = tokenDict.GetOrFail("access_token").ToStringValue(),
+                RefreshToken = tokenDict.GetOrFail("refresh_token").ToStringValue(),
+                AccessTokenExpiration = now.AddSeconds(int.Parse(tokenDict.GetOrFail("expires_in").ToStringValue())),
                 RefreshTokenExpiration = now.AddSeconds(tokenDict.GetOrDefault("refresh_token_expires_in", "").ToString().ParseToIntValue())
             };
 
