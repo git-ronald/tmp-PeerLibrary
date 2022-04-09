@@ -17,8 +17,8 @@ public static class ServiceCollectionExtensions
     public static IServiceProvider ConfigureAppServices(this IServiceCollection services) => services.ConfigureAppServices<DefaultUI>();
     public static IServiceProvider ConfigureAppServices<TUI>(this IServiceCollection services) where TUI : class, IUI
     {
-        Dictionary<Type, Type> appTypes = new Binspector().FindAppLibrary();
-        return services.AddPeerLibrary<TUI>().AddAppLibrary(appTypes).BuildServiceProvider();
+        PeerAppInfo appInfo = new Binspector().FindAppLibrary();
+        return services.AddPeerLibrary<TUI>().AddAppLibrary(appInfo).BuildServiceProvider();
     }
 
     private static IServiceCollection AddPeerLibrary<TUI>(this IServiceCollection services) where TUI : class, IUI
@@ -32,16 +32,21 @@ public static class ServiceCollectionExtensions
             .AddTransient<IHubClient, HubClient>();
     }
 
-    private static IServiceCollection AddAppLibrary(this IServiceCollection services, Dictionary<Type, Type> appTypes)
+    private static IServiceCollection AddAppLibrary(this IServiceCollection services, PeerAppInfo appInfo)
     {
-        var appConfig = (IPeerServiceConfiguration)appTypes[typeof(IPeerServiceConfiguration)].CreateOrFail();
+        var appConfig = (IPeerServiceConfiguration)appInfo.Required[typeof(IPeerServiceConfiguration)].CreateOrFail();
         appConfig.ConfigureServices(services);
 
-        Type concreteRouting = appTypes[typeof(IPeerRouting)];
+        Type concreteRouting = appInfo.Required[typeof(IPeerRouting)];
         services.AddScoped(typeof(IPeerRouting), concreteRouting);
 
-        Type concreteStartup = appTypes[typeof(IPeerStartup)];
+        Type concreteStartup = appInfo.Required[typeof(IPeerStartup)];
         services.AddScoped(typeof(IPeerStartup), concreteStartup);
+
+        foreach (Type controllerType in appInfo.Controllers)
+        {
+            services.AddScoped(controllerType);
+        }
 
         return services;
     }

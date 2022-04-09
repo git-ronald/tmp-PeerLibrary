@@ -8,9 +8,11 @@ namespace PeerLibrary.Configuration;
 /// </summary>
 internal class Binspector
 {
+    private const string ControllerPrefix = "Controller";
+
     private readonly Type[] _requiredTypes = new[] { typeof(IPeerServiceConfiguration), typeof(IPeerRouting), typeof(IPeerStartup) };
 
-    public Dictionary<Type, Type> FindAppLibrary()
+    public PeerAppInfo FindAppLibrary()
     {
         DirectoryInfo? dirInfo = Directory.GetParent(AppContext.BaseDirectory);
         if (dirInfo == null)
@@ -28,12 +30,12 @@ internal class Binspector
             }
 
             var appTypes = GetAppTypes(libraryPath);
-            if (!TryGetAllRequiredTypes(appTypes, out Dictionary<Type, Type> allRequiredTypes))
+            if (!TryGetAppInfo(appTypes, out PeerAppInfo appInfo))
             {
                 continue;
             }
 
-            return allRequiredTypes;
+            return appInfo;
         }
 
         throw new FileNotFoundException("Unable to find app library.");
@@ -50,24 +52,51 @@ internal class Binspector
         return assembly.GetExportedTypes();
     }
 
-    private bool TryGetAllRequiredTypes(Type[] libraryTypes, out Dictionary<Type, Type> allRequiredTypes)
+    private bool TryGetAppInfo(Type[] libraryTypes, out PeerAppInfo appInfo)
     {
-        Queue<Type> requiredTypeQ = new(_requiredTypes);
+        PeerAppInfo result = new();
 
-        Dictionary<Type, Type> result = new();
-        while (requiredTypeQ.TryDequeue(out var abstractType))
+        foreach (Type type in libraryTypes)
         {
-            Type? concreteType = libraryTypes.FirstOrDefault(t => abstractType.IsAssignableFrom(t));
-            if (concreteType == null)
+            Type? abstractType = _requiredTypes.FirstOrDefault(t => t.IsAssignableFrom(type));
+            if (abstractType != null)
             {
-                allRequiredTypes = new Dictionary<Type, Type>();
-                return false;
+                result.Required[abstractType] = type;
+                continue;
             }
 
-            result[abstractType] = concreteType;
+            if (type.Namespace?.StartsWith(ControllerPrefix) ?? false)
+            {
+                var controllerRouting = BuildRoutingMap(type);
+                if (controllerRouting.Count == 0)
+                {
+                    continue;
+                }
+
+                result.Controllers.Add(type);
+                result.RoutingMap = result.RoutingMap.Concat(controllerRouting).ToDictionary(kv => kv.Key, kv => kv.Value);
+            }
         }
 
-        allRequiredTypes = result;
+        if (result.Required.Count != _requiredTypes.Length)
+        {
+            appInfo = new PeerAppInfo();
+            return false;
+        }
+
+        appInfo = result;
         return true;
+    }
+
+    private Dictionary<string, (Type Controller, MethodInfo Action)> BuildRoutingMap(Type controllerType)
+    {
+        var actions = controllerType.GetMethods(BindingFlags.Instance | BindingFlags.Public);
+        if (actions.Length == 0)
+        {
+            return new Dictionary<string, (Type Controller, MethodInfo Action)>();
+        }
+
+        string path = (controllerType.Namespace ?? String.Empty).Substring(ControllerPrefix.Length).Replace('.', '/');
+        return actions.ToDictionary(action => $"{path}/{action.Name}".ToLower(), action => (controllerType, action));
     }
 }
