@@ -9,7 +9,6 @@ namespace PeerLibrary.PeerApp;
 /// </summary>
 internal class Binspector
 {
-    //private const string ControllerPrefix = "Controller";
     private readonly Regex _controllerNamespaceRegex = new(@"^[^\.]+\.Controllers(\..+)$", RegexOptions.Compiled);
 
     private readonly Type[] _requiredTypes = new[] { typeof(IPeerServiceConfiguration), typeof(IPeerStartup) };
@@ -24,20 +23,11 @@ internal class Binspector
 
         foreach (string libraryPath in Directory.GetFileSystemEntries(dirInfo.FullName, "*.dll"))
         {
-            // TODO NOW: delete
-            var fileName = Path.GetFileName(libraryPath);
-            if (fileName == "TestAppLibrary.dll")
-            {
-
-            }
-
             var appTypes = GetAppTypes(libraryPath);
-            if (!TryGetAppInfo(appTypes, out PeerAppInfo appInfo))
+            if (TryGetAppInfo(appTypes, out PeerAppInfo appInfo))
             {
-                continue;
+                return appInfo;
             }
-
-            return appInfo;
         }
 
         throw new FileNotFoundException("Unable to find app library.");
@@ -110,7 +100,7 @@ internal class Binspector
         }
 
         string controllerPath = namespaceMatch.Replace('.', '/');
-        //string path = (controllerType.Namespace ?? string.Empty).Substring(ControllerPrefix.Length).Replace('.', '/');
+
         return actions.Where(action => action != null).ToDictionary(
             action => $"{controllerPath}/{controllerType.Name}/{action?.MethodInfo.Name}".ToLower(),
             action => action ?? new());
@@ -118,15 +108,6 @@ internal class Binspector
 
     private ControllerActionInfo? GetControllerActionDefinition(MethodInfo method)
     {
-        //if (method.ReturnType.IsGenericType)
-        //{
-        //    if (method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>))
-        //    {   
-        //        return new(method, method.GetParameters().FirstOrDefault()?.ParameterType, method.ReturnType);
-        //    }
-        //    return null;
-        //}
-
         if (method.ReturnType.IsGenericType && method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>))
         {
             return new(method, method.GetParameters().FirstOrDefault()?.ParameterType, method.ReturnType);

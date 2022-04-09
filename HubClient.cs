@@ -34,7 +34,6 @@ namespace PeerLibrary
         private readonly SchedulerState _schedulerState = new();
         private CancellationTokenSource _cancellation = new();
 
-
         public HubClient(IOptions<HubSettings> hubOptions, IOptions<PeerSettings> peerOptions, IUI ui, ITokenProvider tokenProvider, PeerDbContext peerDbContext, ISchedulerService scheduler, ISchedulerConfig<TimeSpan> fixedTimeSchedulerConfig, ISchedulerConfig<TimeCompartments> compartmentSchedulerConfig, IServiceScopeFactory scopeFactory)
         {
             _hubSettings = hubOptions.Value;
@@ -197,12 +196,6 @@ namespace PeerLibrary
                 // TODO NOW: invoke PeerError
                 throw;
             }
-
-            //if (path == "DoSomething")
-            //{
-            //    string answer = $"Hi, {data} is a nice number.";
-            //    await TryInvoke(SignalrMessages.PeerResponse, (cnn, method) => cnn.InvokeAsync(method, path, answer));
-            //}
         }
 
         protected override async Task<IAsyncDisposable> Execute()

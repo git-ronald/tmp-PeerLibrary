@@ -45,10 +45,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped(typeof(Dictionary<string, ControllerActionInfo>), _ => appInfo.RoutingMap);
         services.AddScoped<PeerRouting>();
 
-        //Type concreteRouting = appInfo.Required[typeof(IPeerRouting)];
-        //services.AddScoped(typeof(IPeerRouting), );
-        //services.AddScoped<IPeerRouting>(sp => new PeerRouting(appInfo.RoutingMap));
-
         Type concreteStartup = appInfo.Required[typeof(IPeerStartup)];
         services.AddScoped(typeof(IPeerStartup), concreteStartup);
 

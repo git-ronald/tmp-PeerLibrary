@@ -12,15 +12,12 @@ namespace PeerLibrary.PeerApp
         {
             ControllerType = method.DeclaringType ?? typeof(object);
             MethodInfo = method;
-            //AcceptsArgument = acceptsArgument;
             ArgumentType = argumentType;
-            //HasReturnValue = hasReturnValue;
             ReturnType = returnType;
         }
 
         public Type ControllerType { get; } = typeof(object);
         public MethodInfo MethodInfo { get; } = typeof(object).GetMethods()[0];
-        //public bool AcceptsArgument { get; } = false;
         public Type? ArgumentType { get; }
         public Type? ReturnType { get; }
     }
