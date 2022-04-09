@@ -1,10 +1,10 @@
 ﻿using CoreLibrary.Helpers;
-using CoreLibrary.Interfaces;
 using CoreLibrary.SchedulerService;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PeerLibrary.Data;
+using PeerLibrary.PeerApp;
 using PeerLibrary.Settings;
 using PeerLibrary.TokenProviders;
 using PeerLibrary.UI;
@@ -37,16 +37,20 @@ public static class ServiceCollectionExtensions
         var appConfig = (IPeerServiceConfiguration)appInfo.Required[typeof(IPeerServiceConfiguration)].CreateOrFail();
         appConfig.ConfigureServices(services);
 
-        Type concreteRouting = appInfo.Required[typeof(IPeerRouting)];
-        services.AddScoped(typeof(IPeerRouting), concreteRouting);
-
-        Type concreteStartup = appInfo.Required[typeof(IPeerStartup)];
-        services.AddScoped(typeof(IPeerStartup), concreteStartup);
-
         foreach (Type controllerType in appInfo.Controllers)
         {
             services.AddScoped(controllerType);
         }
+
+        services.AddScoped(typeof(Dictionary<string, ControllerActionInfo>), _ => appInfo.RoutingMap);
+        services.AddScoped<PeerRouting>();
+
+        //Type concreteRouting = appInfo.Required[typeof(IPeerRouting)];
+        //services.AddScoped(typeof(IPeerRouting), );
+        //services.AddScoped<IPeerRouting>(sp => new PeerRouting(appInfo.RoutingMap));
+
+        Type concreteStartup = appInfo.Required[typeof(IPeerStartup)];
+        services.AddScoped(typeof(IPeerStartup), concreteStartup);
 
         return services;
     }

@@ -1,7 +1,6 @@
 ﻿using CoreLibrary;
 using CoreLibrary.ConstantValues;
 using CoreLibrary.Helpers;
-using CoreLibrary.Interfaces;
 using CoreLibrary.Models;
 using CoreLibrary.SchedulerService;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -9,11 +8,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using PeerLibrary.ConstantValues;
 using PeerLibrary.Data;
+using PeerLibrary.PeerApp;
 using PeerLibrary.Scheduler;
 using PeerLibrary.Settings;
 using PeerLibrary.TokenProviders;
 using PeerLibrary.UI;
 using System.Text;
+using System.Text.Json;
 
 namespace PeerLibrary
 {
@@ -85,7 +86,7 @@ namespace PeerLibrary
 
             connection.On<TimeSpan>(SignalrMessages.RequestPeerRegistrationInfo, RequestPeerRegistrationInfo);
             connection.On(SignalrMessages.PeerRegistrationConfirmed, PeerRegistrationConfirmed);
-            connection.On<string, object?>(SignalrMessages.PeerRequest, PeerRequest);
+            connection.On<string, JsonElement?>(SignalrMessages.PeerRequest, PeerRequest);
         }
 
         private Task OnonnectionClosed(Exception? ex)
@@ -115,7 +116,7 @@ namespace PeerLibrary
                 bool save = false;
                 bool restartScheduler = false;
 
-                var scope = _scopeFactory.CreateScope();
+                using var scope = _scopeFactory.CreateScope();
                 using var peerDbContext = scope.ServiceProvider.GetRequiredService<PeerDbContext>();
                 Guid peerNodeId = await peerDbContext.GetSetting<Guid>(SettingKeys.PeerNodeId);
                 if (peerNodeId == Guid.Empty)
@@ -173,16 +174,35 @@ namespace PeerLibrary
             }
         }
 
-        private async Task PeerRequest(string method, object? data)
+        private async Task PeerRequest(string path, JsonElement? data)
         {
-            // TODO: create services here using...
-            // var scope = _scopeFactory.CreateScope();
-            
-            if (method == "DoSomething")
+            try
             {
-                string answer = $"Hi, {data} is a nice number.";
-                await TryInvoke(SignalrMessages.PeerResponse, (cnn, method) => cnn.InvokeAsync(method, method, answer));
+                using var scope = _scopeFactory.CreateScope();
+                PeerRouting routing = scope.ServiceProvider.GetRequiredService<PeerRouting>();
+
+                var result = await routing.CallControllerAction(path, data);
+
+                if (!result.Found)
+                {
+                    // TODO NOW: invoke PeerError
+                    return;
+                }
+
+                await TryInvoke(SignalrMessages.PeerResponse, (cnn, method) => cnn.InvokeAsync(method, path, result.Result));
+                
             }
+            catch (Exception ex)
+            {
+                // TODO NOW: invoke PeerError
+                throw;
+            }
+
+            //if (path == "DoSomething")
+            //{
+            //    string answer = $"Hi, {data} is a nice number.";
+            //    await TryInvoke(SignalrMessages.PeerResponse, (cnn, method) => cnn.InvokeAsync(method, path, answer));
+            //}
         }
 
         protected override async Task<IAsyncDisposable> Execute()
