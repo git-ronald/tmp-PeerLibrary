@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
-namespace PeerLibrary.PeerApp;
+namespace PeerLibrary.PeerApp.Interfaces;
 
 public interface IPeerStartup
 {

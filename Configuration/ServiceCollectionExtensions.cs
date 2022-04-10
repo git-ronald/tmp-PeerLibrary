@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PeerLibrary.Data;
 using PeerLibrary.PeerApp;
+using PeerLibrary.PeerApp.Interfaces;
 using PeerLibrary.Settings;
 using PeerLibrary.TokenProviders;
 using PeerLibrary.UI;
@@ -34,7 +35,7 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddAppLibrary(this IServiceCollection services, PeerAppInfo appInfo)
     {
-        var appConfig = (IPeerServiceConfiguration)appInfo.Required[typeof(IPeerServiceConfiguration)].CreateOrFail();
+        var appConfig = (IPeerServiceConfiguration)appInfo.RequiredTypes[typeof(IPeerServiceConfiguration)].CreateOrFail();
         appConfig.ConfigureServices(services);
 
         foreach (Type controllerType in appInfo.Controllers)
@@ -45,7 +46,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped(typeof(Dictionary<string, ControllerActionInfo>), _ => appInfo.RoutingMap);
         services.AddScoped<PeerRouting>();
 
-        Type concreteStartup = appInfo.Required[typeof(IPeerStartup)];
+        Type concreteStartup = appInfo.RequiredTypes[typeof(IPeerStartup)];
         services.AddScoped(typeof(IPeerStartup), concreteStartup);
 
         return services;

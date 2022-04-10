@@ -1,4 +1,5 @@
-﻿using PeerLibrary.Configuration;
+﻿using CoreLibrary.Helpers;
+using PeerLibrary.PeerApp.Interfaces;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
@@ -9,7 +10,9 @@ namespace PeerLibrary.PeerApp;
 /// </summary>
 internal class Binspector
 {
-    private readonly Regex _controllerNamespaceRegex = new(@"^[^\.]+\.Controllers(\..+)$", RegexOptions.Compiled);
+    private readonly Regex _controllerInterfaceNsRegex = new(@"^[^\.]+\.PeerApp\.Interfaces\.Controllers\.?(.*)$", RegexOptions.Compiled);
+    private readonly Regex _peerControllerNsRegex = new(@"^[^\.]+\.Controllers\.Peer\.?(.*)$", RegexOptions.Compiled);
+    private readonly Regex _appControllerNsRegex = new(@"^[^\.]+\.Controllers\.App\.?(.*)$", RegexOptions.Compiled);
 
     private readonly Type[] _requiredTypes = new[] { typeof(IPeerServiceConfiguration), typeof(IPeerStartup) };
 
@@ -21,10 +24,18 @@ internal class Binspector
             throw new DirectoryNotFoundException("Unable to find bin directory."); // Should never happen
         }
 
+        var peerLibraryPath = Assembly.GetExecutingAssembly().Location;
+        List<Type> requiredControllers = GetRequiredControllers();
+
         foreach (string libraryPath in Directory.GetFileSystemEntries(dirInfo.FullName, "*.dll"))
         {
+            if (libraryPath.Equals(peerLibraryPath, StringComparison.CurrentCultureIgnoreCase))
+            {
+                continue;
+            }
+
             var appTypes = GetAppTypes(libraryPath);
-            if (TryGetAppInfo(appTypes, out PeerAppInfo appInfo))
+            if (TryGetAppInfo(appTypes, requiredControllers, out PeerAppInfo appInfo))
             {
                 return appInfo;
             }
@@ -44,16 +55,17 @@ internal class Binspector
         return assembly.GetExportedTypes();
     }
 
-    private bool TryGetAppInfo(Type[] libraryTypes, out PeerAppInfo appInfo)
+    private bool TryGetAppInfo(Type[] libraryTypes, List<Type> peerControllers, out PeerAppInfo appInfo)
     {
         PeerAppInfo result = new();
+        int peerControllerCount = 0;
 
         foreach (Type type in libraryTypes)
         {
             Type? abstractType = _requiredTypes.FirstOrDefault(t => t.IsAssignableFrom(type));
             if (abstractType != null)
             {
-                result.Required[abstractType] = type;
+                result.RequiredTypes[abstractType] = type;
                 continue;
             }
 
@@ -61,23 +73,39 @@ internal class Binspector
             {
                 continue;
             }
-            var namespaceMatch = _controllerNamespaceRegex.Match(type.Namespace);
-            if (!namespaceMatch.Success)
+
+            var appNsMatch = _appControllerNsRegex.Match(type.Namespace);
+            if (appNsMatch.Success)
             {
+                var actions = MapAppControllerActions(type, appNsMatch.Groups[1].Value, "/app");
+                if (actions.Count > 0)
+                {
+                    result.Controllers.Add(type);
+                    result.RoutingMap.ConcatDictionary(actions);
+                }
                 continue;
             }
 
-            var controllerRouting = MapControllerRouting(type, namespaceMatch.Groups[1].Value);
-            if (controllerRouting.Count == 0)
+            var peerNsMatch = _peerControllerNsRegex.Match(type.Namespace);
+            if (peerNsMatch.Success)
             {
+                var controller = peerControllers.FirstOrDefault(t => t.IsAssignableFrom(type));
+                if (controller == null)
+                {
+                    continue;
+                }
+
+                peerControllerCount++;
+
+                var actions = MapAppControllerActions(type, peerNsMatch.Groups[1].Value, "/peer");
+                result.Controllers.Add(type);
+                result.RoutingMap.ConcatDictionary(actions);
+
                 continue;
             }
-
-            result.Controllers.Add(type);
-            result.RoutingMap = result.RoutingMap.Concat(controllerRouting).ToDictionary(kv => kv.Key, kv => kv.Value);
         }
 
-        if (result.Required.Count != _requiredTypes.Length)
+        if (result.RequiredTypes.Count != _requiredTypes.Length || peerControllerCount != peerControllers.Count)
         {
             appInfo = new PeerAppInfo();
             return false;
@@ -87,7 +115,28 @@ internal class Binspector
         return true;
     }
 
-    private Dictionary<string, ControllerActionInfo> MapControllerRouting(Type controllerType, string namespaceMatch)
+    private List<Type> GetRequiredControllers()
+    {
+        List<Type> result = new();
+
+        foreach (Type type in Assembly.GetExecutingAssembly().GetExportedTypes())
+        {
+            if (type.Namespace == null || !type.IsInterface)
+            {
+                continue;
+            }
+
+            var nsMatch = _controllerInterfaceNsRegex.Match(type.Namespace);
+            if (nsMatch.Success)
+            {
+                result.Add(type);
+            }
+        }
+
+        return result;
+    }
+
+    private Dictionary<string, ControllerActionInfo> MapAppControllerActions(Type controllerType, string namespaceMatch, string pathPrefix)
     {
         var actions = controllerType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
             .Select(m => GetControllerActionDefinition(m))
@@ -102,7 +151,7 @@ internal class Binspector
         string controllerPath = namespaceMatch.Replace('.', '/');
 
         return actions.Where(action => action != null).ToDictionary(
-            action => $"{controllerPath}/{controllerType.Name}/{action?.MethodInfo.Name}".ToLower(),
+            action => $"{pathPrefix}/{controllerPath}/{controllerType.Name}/{action?.MethodInfo.Name}".ToLower(),
             action => action ?? new());
     }
 
