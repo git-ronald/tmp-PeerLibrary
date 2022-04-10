@@ -13,6 +13,7 @@ using PeerLibrary.Scheduler;
 using PeerLibrary.Settings;
 using PeerLibrary.TokenProviders;
 using PeerLibrary.UI;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 
@@ -76,7 +77,7 @@ namespace PeerLibrary
 
             connection.Closed += OnonnectionClosed;
 
-            connection.On(SignalrMessages.TestResponse, () => 
+            connection.On(SignalrMessages.TestResponse, () =>
             {
                 _ui.WriteTimeAndLine($"Reveived test response from {_hubSettings.HubUrl}.");
             });
@@ -184,17 +185,16 @@ namespace PeerLibrary
 
                 if (!result.Found)
                 {
-                    // TODO NOW: invoke PeerError
+                    await TryInvoke(SignalrMessages.PeerError, (cnn, method) => cnn.InvokeAsync(method, path, data, HttpStatusCode.NotFound));
                     return;
                 }
 
                 await TryInvoke(SignalrMessages.PeerResponse, (cnn, method) => cnn.InvokeAsync(method, path, result.Result));
-                
             }
             catch (Exception ex)
             {
-                // TODO NOW: invoke PeerError
-                throw;
+                // TODO: logging
+                await TryInvoke(SignalrMessages.PeerError, (cnn, method) => cnn.InvokeAsync(method, path, data, HttpStatusCode.BadRequest));
             }
         }
 
