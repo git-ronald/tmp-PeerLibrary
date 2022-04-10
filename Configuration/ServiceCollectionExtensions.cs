@@ -1,10 +1,10 @@
 ﻿using CoreLibrary.Helpers;
-using CoreLibrary.Interfaces;
 using CoreLibrary.SchedulerService;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PeerLibrary.Data;
+using PeerLibrary.PeerApp;
 using PeerLibrary.Settings;
 using PeerLibrary.TokenProviders;
 using PeerLibrary.UI;
@@ -17,8 +17,8 @@ public static class ServiceCollectionExtensions
     public static IServiceProvider ConfigureAppServices(this IServiceCollection services) => services.ConfigureAppServices<DefaultUI>();
     public static IServiceProvider ConfigureAppServices<TUI>(this IServiceCollection services) where TUI : class, IUI
     {
-        Dictionary<Type, Type> appTypes = new Binspector().FindAppLibrary();
-        return services.AddPeerLibrary<TUI>().AddAppLibrary(appTypes).BuildServiceProvider();
+        PeerAppInfo appInfo = new Binspector().FindAppLibrary();
+        return services.AddPeerLibrary<TUI>().AddAppLibrary(appInfo).BuildServiceProvider();
     }
 
     private static IServiceCollection AddPeerLibrary<TUI>(this IServiceCollection services) where TUI : class, IUI
@@ -32,15 +32,20 @@ public static class ServiceCollectionExtensions
             .AddTransient<IHubClient, HubClient>();
     }
 
-    private static IServiceCollection AddAppLibrary(this IServiceCollection services, Dictionary<Type, Type> appTypes)
+    private static IServiceCollection AddAppLibrary(this IServiceCollection services, PeerAppInfo appInfo)
     {
-        var appConfig = (IPeerServiceConfiguration)appTypes[typeof(IPeerServiceConfiguration)].CreateOrFail();
+        var appConfig = (IPeerServiceConfiguration)appInfo.Required[typeof(IPeerServiceConfiguration)].CreateOrFail();
         appConfig.ConfigureServices(services);
 
-        Type concreteRouting = appTypes[typeof(IPeerRouting)];
-        services.AddScoped(typeof(IPeerRouting), concreteRouting);
+        foreach (Type controllerType in appInfo.Controllers)
+        {
+            services.AddScoped(controllerType);
+        }
 
-        Type concreteStartup = appTypes[typeof(IPeerStartup)];
+        services.AddScoped(typeof(Dictionary<string, ControllerActionInfo>), _ => appInfo.RoutingMap);
+        services.AddScoped<PeerRouting>();
+
+        Type concreteStartup = appInfo.Required[typeof(IPeerStartup)];
         services.AddScoped(typeof(IPeerStartup), concreteStartup);
 
         return services;
