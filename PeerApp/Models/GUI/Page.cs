@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PeerLibrary.Data.Models;
+namespace PeerLibrary.PeerApp.Models.GUI;
 
 public class Page
 {
-    public Guid Id { get; set; }
+    public ICollection<PageRow> Rows { get; set; } = new List<PageRow>();
 }
